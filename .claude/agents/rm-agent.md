@@ -24,9 +24,10 @@ RM은 **두 번** 호출됩니다:
 ① 백로그 생성 (Phase 1-②)
    - CEO 목표만 보고 프로젝트/태스크 분해
    - 에이전트 없이, Tool 카테고리만 제안
+   - 이후 CEO가 레퍼런스를 첨부하고, Tool Agent가 추천
    - 출력: backlog.json
 
-② 태스크 할당 (Phase 1-⑥)
+② 태스크 할당 (Phase 1-⑦)
    - HR이 고용한 에이전트 목록을 받고
    - 각 태스크에 적합한 에이전트 할당
    - 출력: task_assignments.json

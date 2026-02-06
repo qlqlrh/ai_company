@@ -3,11 +3,13 @@
 ## 1. 개요
 
 ### 1.1 문제점 (현재 시스템)
+
 - 에이전트들이 사용 가능한 Tool을 모른 채 작업 계획 수립
 - CEO가 기대하는 Tool(Figma, Canva, 웹검색 등)과 실제 사용 가능한 Tool 불일치
 - Tool 없이 작업 진행 → 기대와 다른 결과물
 
 ### 1.2 해결 방향
+
 - **"뭘 할지" → "어떻게 할지" → "누가 할지"** 순서로 변경
 - CEO가 각 작업에 사용할 Tool 직접 지정
 - Tool Agent가 사용 가능 여부 검증 및 대안 제시
@@ -26,7 +28,7 @@
 │                                                                 │
 │  ① CEO 목표 입력                                                │
 │       ↓                                                         │
-│  ② RM: 백로그 생성 (프로젝트/태스크 목록)                        │
+│  ② RM: 백로그 생성 (프로젝트/태스크 목록)                   ~   ~  │
 │       ↓                                                         │
 │  ③ CEO: 각 태스크에 사용할 Tool 지정                            │
 │       ↓                                                         │
@@ -52,6 +54,7 @@
 ### 2.2 단계별 상세
 
 #### Phase 1-①: CEO 목표 입력
+
 ```python
 CEORequest:
     goal: str                    # "쿠팡 입점 및 월 매출 1000만원"
@@ -60,6 +63,7 @@ CEORequest:
 ```
 
 #### Phase 1-②: RM 백로그 생성
+
 - CEO 목표만 보고 필요한 프로젝트/태스크 분해
 - 아직 Tool, 에이전트 할당 없음 (순수 백로그)
 
@@ -76,6 +80,7 @@ BacklogItem:
 ```
 
 **예시 출력:**
+
 ```
 프로젝트 1: 쿠팡 입점 준비
   ├─ Task 1.1: 시장 트렌드 조사 [suggested: web_search]
@@ -93,6 +98,7 @@ BacklogItem:
 ```
 
 #### Phase 1-③: CEO Tool 지정
+
 CEO가 백로그를 보고 각 태스크에 사용할 Tool 선택/입력
 
 ```python
@@ -112,6 +118,7 @@ ToolSelectionResponse:
 ```
 
 #### Phase 1-④: Tool Agent 검증
+
 Tool Agent가 CEO 선택을 검증하고 피드백
 
 ```python
@@ -132,6 +139,7 @@ ToolAlternative:
 ```
 
 **예시 응답:**
+
 ```
 Task 3.1 (제품 상세 페이지 디자인):
   - 요청: figma, canva
@@ -146,6 +154,7 @@ Task 3.1 (제품 상세 페이지 디자인):
 ```
 
 #### Phase 1-⑤: HR 에이전트 고용 + Tool 할당
+
 - 확정된 백로그 + Tool 목록을 보고 필요한 에이전트 고용
 - 각 에이전트에게 사용할 Tool 할당
 
@@ -160,6 +169,7 @@ AgentDefinition:
 ```
 
 **예시:**
+
 ```
 고용된 에이전트:
   1. 트렌드 리서처
@@ -173,6 +183,7 @@ AgentDefinition:
 ```
 
 #### Phase 1-⑥: RM 태스크 할당
+
 에이전트 목록을 보고 각 태스크에 적합한 에이전트 할당
 
 ```python
@@ -189,6 +200,7 @@ Task:
 ```
 
 #### Phase 2-⑦: CEO 백로그 선택
+
 CEO가 실행할 프로젝트 선택
 
 ```python
@@ -199,6 +211,7 @@ ExecutionRequest:
 ```
 
 #### Phase 2-⑧~⑨: Expert 실행 및 보고
+
 기존 흐름과 동일하나, 이제 Tool이 확정된 상태로 실행
 
 ---
@@ -206,6 +219,7 @@ ExecutionRequest:
 ## 3. Tool Agent 설계
 
 ### 3.1 역할
+
 - 사용 가능한 Tool 목록 관리
 - CEO 요청 Tool의 가용성 검증
 - 대안 Tool 제시
@@ -266,12 +280,14 @@ class ToolSourceType(Enum):
 
 #### Tool 소스별 특성
 
-| 소스 | 탐색 방법 | 예시 |
-|------|----------|------|
-| **MCP Server** | MCP 설정 파일 스캔 | Figma, Rube, GitHub |
-| **Skills** | `.claude/skills/` 디렉토리 스캔 | frontend-design, mcp-builder |
-| **Built-in** | 시스템 내장 목록 | WebSearch, WebFetch |
-| **Custom API** | 수동 등록 | Coupang API |
+
+| 소스             | 탐색 방법                     | 예시                           |
+| -------------- | ------------------------- | ---------------------------- |
+| **MCP Server** | MCP 설정 파일 스캔              | Figma, Rube, GitHub          |
+| **Skills**     | `.claude/skills/` 디렉토리 스캔 | frontend-design, mcp-builder |
+| **Built-in**   | 시스템 내장 목록                 | WebSearch, WebFetch          |
+| **Custom API** | 수동 등록                     | Coupang API                  |
+
 
 #### Skill 자동 탐색
 
@@ -1180,20 +1196,23 @@ DEFAULT_AGENTS = [
 ## 7. 구현 우선순위
 
 ### Phase 1: 핵심 구조 변경
+
 1. Tool Agent 구현 (`src/agents/tool.py`)
 2. 그래프 노드 순서 변경 (`src/graph/nodes.py`)
 3. 새로운 Interrupt 타입 추가 (`src/schemas/interrupt.py`)
 4. CompanyState 확장 (`src/context/state.py`)
 
 ### Phase 2: Tool 시스템 강화
-5. Tool Capability Mapping 구현 (`src/tools/capabilities.py`)
-6. Tool 대안 제시 로직 구현
-7. Tool 상태 관리 강화
+
+1. Tool Capability Mapping 구현 (`src/tools/capabilities.py`)
+2. Tool 대안 제시 로직 구현
+3. Tool 상태 관리 강화
 
 ### Phase 3: UI/UX 개선
-8. 백로그 뷰어 (프론트엔드)
-9. Tool 선택 UI
-10. 실행 프로젝트 선택 UI
+
+1. 백로그 뷰어 (프론트엔드)
+2. Tool 선택 UI
+3. 실행 프로젝트 선택 UI
 
 ---
 
@@ -1246,10 +1265,13 @@ DEFAULT_AGENTS = [
 
 ## 9. 변경 요약
 
-| 항목 | 기존 | 변경 |
-|------|------|------|
-| 순서 | HR → RM → Expert | RM(백로그) → Tool Agent → HR → RM(할당) → Expert |
-| Tool 선택 | 시스템 자동 | CEO 직접 지정 |
-| Tool 검증 | 실행 시점 | 계획 단계 (사전 검증) |
-| 기본 에이전트 | CEO, HR, RM | CEO, HR, RM, **Tool Agent** |
-| 실행 방식 | 자동 진행 | CEO가 백로그 선택 후 실행 |
+
+| 항목      | 기존               | 변경                                          |
+| ------- | ---------------- | ------------------------------------------- |
+| 순서      | HR → RM → Expert | RM(백로그) → Tool Agent → HR → RM(할당) → Expert |
+| Tool 선택 | 시스템 자동           | CEO 직접 지정                                   |
+| Tool 검증 | 실행 시점            | 계획 단계 (사전 검증)                               |
+| 기본 에이전트 | CEO, HR, RM      | CEO, HR, RM, **Tool Agent**                 |
+| 실행 방식   | 자동 진행            | CEO가 백로그 선택 후 실행                            |
+
+
