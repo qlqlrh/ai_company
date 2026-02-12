@@ -1,48 +1,44 @@
 ---
 name: ai-company
-description: "AI Company 멀티 에이전트 시스템 시뮬레이션. CEO가 목표를 입력하면 RM/Tool Agent/HR/Expert 에이전트들이 자율적으로 협업하여 목표를 달성합니다. Tool-aware 워크플로우로 CEO가 원하는 Tool을 지정하고 검증받을 수 있습니다."
+description: "AI Company 멀티 에이전트 시스템 시뮬레이션. CEO가 목표를 입력하면, Tool Agent가 인벤토리를 생성하고 HR이 역량 기반으로 Expert를 고용합니다. 프로젝트 실행 전 태스크별 Task Briefing으로 CEO가 Tool/레퍼런스/지시사항을 검토·승인한 뒤, Expert가 자동 병렬로 실행합니다."
 ---
 
-# AI Company v2 - Tool-Aware Multi-Agent System
+# AI Company v4 - Interactive Execution Multi-Agent System
 
 CEO(사용자)가 목표를 입력하면, 에이전트들이 협업하여 목표를 달성하는 시스템입니다.
+v4의 핵심은 **Task Briefing** — 태스크 실행 전에 CEO가 "누가, 어떤 Tool로, 어떻게"를 검토하고 승인합니다.
 
-## 새로운 워크플로우 (v2)
+## 워크플로우 (v4)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Phase 1: 계획 수립                        │
+│                    Phase 1: 계획 수립                            │
 ├─────────────────────────────────────────────────────────────────┤
 │  ① CEO 목표 입력                                                │
 │       ↓                                                         │
-│  ② RM: 백로그 생성 (프로젝트/태스크)                            │
+│  ② RM: 백로그 생성 (dependency_graph 포함)                      │
 │       ↓                                                         │
-│  ③ CEO: 각 태스크에 Tool 지정                                   │
+│  ③ Tool Agent: Tool 인벤토리 생성 (3-tier 검증)                 │
 │       ↓                                                         │
-│  ④ Tool Agent: Tool 검증 + 대안 제시                            │
+│  ④ HR: 인벤토리 참고하여 역량 기반 Expert 생성                  │
 │       ↓                                                         │
-│  ⑤ HR: 에이전트 고용 + Tool 할당                                │
-│       ↓                                                         │
-│  ⑥ RM: 에이전트에 태스크 할당                                   │
+│  ⑤ RM: Expert 할당 + 기본 Tool 배정                             │
 ├─────────────────────────────────────────────────────────────────┤
-│                        Phase 2: 실행                            │
+│                    Phase 2: 프로젝트 실행 (반복)                 │
 ├─────────────────────────────────────────────────────────────────┤
-│  ⑦ CEO: 실행할 프로젝트 선택                                    │
+│  ⑥ CEO: 실행할 프로젝트 선택                                    │
 │       ↓                                                         │
-│  ⑧ Expert: 태스크 수행                                          │
+│  ⑦ 태스크별 실행 계획 보고 (Task Briefing)                      │
 │       ↓                                                         │
-│  ⑨ 결과 보고                                                    │
+│  ⑧ CEO: 태스크별 승인 / Tool 변경 / 레퍼런스 추가 / 지시사항    │
+│       ↓                                                         │
+│  ⑨ (필요시) Tool Agent 레퍼런스 분석 + Tool 조정                │
+│       ↓                                                         │
+│  ⑩ 태스크 실행 (dependency_graph 기반 자동 병렬)                │
+│       ↓                                                         │
+│  ⑪ 결과 보고 → 다음 프로젝트 ⑥으로                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
-
-## 핵심 변경사항 (v1 → v2)
-
-| 항목 | v1 (기존) | v2 (신규) |
-|------|----------|----------|
-| 순서 | HR → RM → Expert | RM(백로그) → Tool → HR → RM(할당) → Expert |
-| Tool 선택 | 시스템 자동 | **CEO가 직접 지정** |
-| Tool 검증 | 실행 시점 | **계획 단계 (사전 검증)** |
-| 기본 에이전트 | CEO, HR, RM | CEO, RM, **Tool Agent**, HR |
 
 ## 실행 방법
 
@@ -60,290 +56,334 @@ CEO(사용자)가 목표를 입력하면, 에이전트들이 협업하여 목표
 
 ```
 ══════════════════════════════════════════════════════════════
-   🏢 AI Company v2 - Tool-Aware Multi-Agent System
+   AI Company v4 - Interactive Execution Multi-Agent System
 ══════════════════════════════════════════════════════════════
 
 안녕하세요, CEO님! 회사의 목표를 입력해주세요.
 
 예시:
-• "쿠팡에 입점하고 월 매출 1000만원 달성"
-• "브랜드 인스타그램 운영하고 팔로워 1만명 달성"
-• "자동화된 고객 응대 시스템 구축"
+- "쿠팡에 입점하고 월 매출 1000만원 달성"
+- "개발자 밈 인스타그램 운영하고 팔로워 1만명 달성"
+- "자동화된 고객 응대 시스템 구축"
 
-📝 목표:
+목표:
 ```
 
-목표를 받으면 JSON으로 저장:
+**ceo-agent 호출**: 목표를 JSON으로 저장
 
 ```bash
 # company/state/session.json
 {
-  "session_id": "ses_20250119_001",
+  "session_id": "ses_YYYYMMDD_NNN",
   "phase": "goal_input",
-  "created_at": "2025-01-19T10:00:00Z"
+  "created_at": "ISO-8601"
 }
 
 # company/state/ceo_goal.json
 {
   "goal": "입력받은 목표",
-  "created_at": "2025-01-19T10:00:00Z"
+  "created_at": "ISO-8601"
 }
 ```
 
 ### Step 2: RM 백로그 생성
 
-RM 역할로 목표를 분석하여 백로그를 생성합니다.
+**rm-agent 호출**: 목표를 프로젝트/태스크로 분해 + **dependency_graph 생성**
 
-**분석 시 고려사항:**
+분석 시 고려사항:
 1. 목표 달성에 필요한 프로젝트 식별
 2. 각 프로젝트를 구체적 태스크로 분해
-3. 태스크 간 의존성 파악
+3. **태스크 간 의존성을 명시적 dependency_graph로 표현**
 4. 각 태스크에 필요한 Tool 카테고리 제안
 
-**출력 예시:**
 ```
 ══════════════════════════════════════════════════════════════
-   📋 RM: 백로그 생성 완료
+   RM: 백로그 생성 완료
 ══════════════════════════════════════════════════════════════
 
-📁 프로젝트 1: 쿠팡 입점 준비
-   ├─ 📋 Task 1.1: 시장 트렌드 조사
-   │      제안 Tool: [web_search]
-   │
-   ├─ 📋 Task 1.2: 경쟁사 분석
-   │      제안 Tool: [web_search, spreadsheet]
-   │
-   └─ 📋 Task 1.3: 제품 카테고리 선정
-          제안 Tool: [analysis]
+프로젝트 1: 시장 조사 및 경쟁사 분석
+   ├─ Task 001: 경쟁사 리서치        [RESEARCH] 의존: 없음
+   ├─ Task 002: 타겟 페르소나 정의   [DOCUMENT] 의존: task-001
+   └─ Task 003: 차별화 전략 수립     [DOCUMENT] 의존: task-001, task-002
 
-📁 프로젝트 2: 제품 소싱
-   ├─ 📋 Task 2.1: 1688/타오바오 제품 검색
-   │      제안 Tool: [web_search]
-   │
-   └─ 📋 Task 2.2: 공급업체 리스트업
-          제안 Tool: [spreadsheet]
+프로젝트 2: 콘텐츠 전략
+   ├─ Task 004: 콘텐츠 소재 수집     [RESEARCH] 의존: 없음
+   ├─ Task 005: 콘텐츠 캘린더 수립   [DOCUMENT] 의존: task-004
+   └─ Task 006: 해시태그 전략        [RESEARCH] 의존: task-001
 
-📁 프로젝트 3: 상품 등록
-   ├─ 📋 Task 3.1: 제품 상세 페이지 디자인
-   │      제안 Tool: [design]
-   │
-   ├─ 📋 Task 3.2: 상품 사진 편집
-   │      제안 Tool: [image_editor]
-   │
-   └─ 📋 Task 3.3: 쿠팡 상품 등록
-          제안 Tool: [ecommerce_api]
+의존성 그래프:
+  task-001: []  ←── 독립 (병렬 가능)
+  task-004: []  ←── 독립 (병렬 가능)
+  task-002: [task-001]
+  task-006: [task-001]
+  task-003: [task-001, task-002]
+  task-005: [task-004]
 ```
 
-저장: `company/state/backlog.json`
+저장: `company/state/backlog.json` (dependency_graph 포함)
 
-### Step 3: CEO Tool 선택
+### Step 3: Tool Agent 인벤토리 생성
 
-CEO에게 각 태스크에 사용할 Tool을 선택받습니다.
+**tool-agent 호출**: 사용 가능한 Tool 전체를 인벤토리로 정리
+
+검증 프로세스 (3-tier):
+1. Built-in 체크 (WebSearch, WebFetch, Read, Write, Edit, Bash, Glob, Grep)
+2. Local Skills 스캔 (.claude/skills/)
+3. MCP 서버 + Rube 마켓플레이스 검색 (RUBE_SEARCH_TOOLS + RUBE_MANAGE_CONNECTIONS)
+4. 외부 API 웹 검색 (WebSearch)
+5. 마켓플레이스 검색 (MCP.so 등)
 
 ```
 ══════════════════════════════════════════════════════════════
-   🔧 CEO: Tool 선택
+   Tool Agent: Tool 인벤토리 생성 완료
 ══════════════════════════════════════════════════════════════
 
-각 태스크에 사용할 Tool을 입력해주세요.
-"추천"을 입력하면 Tool Agent가 적합한 Tool을 추천합니다.
+Built-in (8): WebSearch, WebFetch, Read, Write, Edit, Bash, Glob, Grep
+Skills (2): /frontend-design, /mcp-builder
+MCP/Rube (3):
+  - instagram: ACTIVE (@cs_student_tips)
+  - gemini: ACTIVE (이미지 생성)
+  - canva: ACTIVE (디자인)
+External API (1):
+  - imgflip_api: AVAILABLE (무료 밈 템플릿)
 
-─────────────────────────────────────────────────────────────
-📋 Task 1.1: 시장 트렌드 조사
-   제안 카테고리: web_search
-
-   사용 가능한 Tool 예시:
-   • WebSearch (built-in)
-   • tavily, perplexity (MCP)
-
-   Tool 선택: [WebSearch]
-─────────────────────────────────────────────────────────────
-📋 Task 3.1: 제품 상세 페이지 디자인
-   제안 카테고리: design
-
-   사용 가능한 Tool 예시:
-   • /frontend-design (Skill)
-   • figma (MCP)
-   • canva (외부 - 미지원)
-
-   Tool 선택: [figma]
-─────────────────────────────────────────────────────────────
+태스크별 기본 Tool 추천:
+  task-001: WebSearch + WebFetch + INSTAGRAM_GET_USER_INFO
+  task-004: WebSearch + WebFetch
+  task-010: GEMINI_GENERATE_IMAGE + imgflip_api + Bash
 ```
 
-저장: `company/state/tool_selections.json`
+저장: `company/state/tool_inventory.json`
 
-### Step 4: Tool Agent 검증
+### Step 4: HR 에이전트 고용
 
-Tool Agent가 CEO의 선택을 검증합니다.
-
-**검증 소스 (우선순위):**
-1. **Built-in**: WebSearch, WebFetch, Read, Write, Edit, Bash
-2. **Skills**: `.claude/skills/` 디렉토리 스캔
-3. **MCP**: 설정된 MCP 서버 (figma, rube 등)
-
-**검증 결과 예시:**
-```
-══════════════════════════════════════════════════════════════
-   ✅ Tool Agent: 검증 결과
-══════════════════════════════════════════════════════════════
-
-📋 Task 1.1: 시장 트렌드 조사
-   ✅ WebSearch - 사용 가능 (Built-in)
-
-📋 Task 3.1: 제품 상세 페이지 디자인
-   ⚠️ figma - MCP 설정 필요
-
-   💡 대안 제시:
-   ┌────┬─────────────────────┬────────┬───────┐
-   │순위│ Tool                │ 타입   │ 점수  │
-   ├────┼─────────────────────┼────────┼───────┤
-   │ 1  │ /frontend-design    │ Skill  │ 0.95  │
-   │ 2  │ figma (설정 후)     │ MCP    │ 0.90  │
-   └────┴─────────────────────┴────────┴───────┘
-
-   선택: [1. 대안 사용] [2. MCP 설정] [3. 다른 Tool]
-
-📋 Task 3.3: 쿠팡 상품 등록
-   ❌ coupang_api - 현재 미지원
-
-   🔍 외부 검색 결과:
-   • GitHub에서 "coupang-mcp" 발견 (미검증)
-
-   선택: [1. 수동 등록] [2. MCP 설치 시도] [3. 건너뛰기]
-```
-
-저장: `company/state/tool_validations.json`
-
-### Step 5: HR 에이전트 고용
-
-검증된 Tool 목록 기반으로 Expert 에이전트를 고용합니다.
+**hr-agent 호출**: Tool 인벤토리를 참고하여 **역량 기반** Expert 생성
 
 ```
 ══════════════════════════════════════════════════════════════
-   👥 HR: 에이전트 고용 완료
+   HR: 에이전트 고용 완료
 ══════════════════════════════════════════════════════════════
 
 ┌──────────────────────────────────────────────────────────────┐
-│ 👤 Expert 1: 트렌드 리서처                                   │
+│ Expert 1: 시장 조사 전문가                                    │
 ├──────────────────────────────────────────────────────────────┤
-│ 역할: 시장 트렌드 및 경쟁사 조사                             │
-│ Tools: WebSearch, WebFetch                                   │
-│ 전문성: market_research, competitor_analysis                 │
+│ 역량: research, data_analysis                                │
+│ 실현 가능 Tool: WebSearch, WebFetch, INSTAGRAM_GET_USER_INFO │
+│ 기본 Tool: Read, Write, WebSearch                            │
 └──────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────┐
-│ 👤 Expert 2: 디자인 전문가                                   │
+│ Expert 4: 밈 콘텐츠 제작 전문가                               │
 ├──────────────────────────────────────────────────────────────┤
-│ 역할: 제품 페이지 및 이미지 디자인                           │
-│ Tools: /frontend-design                                      │
-│ 전문성: web_design, ui_ux                                    │
-└──────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────┐
-│ 👤 Expert 3: 이커머스 전문가                                 │
-├──────────────────────────────────────────────────────────────┤
-│ 역할: 상품 등록 및 판매 관리                                 │
-│ Tools: WebFetch, Write                                       │
-│ 전문성: ecommerce, product_listing                           │
+│ 역량: image_creation, meme_design, copywriting               │
+│ 실현 가능 Tool: GEMINI_GENERATE_IMAGE, imgflip_api, PIL      │
+│ 기본 Tool: Read, Write, WebSearch, Bash                      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 저장: `company/state/hired_agents.json`
 
-### Step 6: RM 태스크 할당
+### Step 5: RM 태스크 할당
 
-RM이 각 태스크에 적합한 에이전트를 할당합니다.
+**rm-agent 호출**: Expert에 태스크 할당 + 인벤토리의 task_tool_defaults 기반 기본 Tool 배정
 
 저장: `company/state/task_assignments.json`
 
-### Step 7: CEO 프로젝트 선택
+session.json → phase: `ready_to_execute`
+
+### Step 6: CEO 프로젝트 선택
 
 ```
 ══════════════════════════════════════════════════════════════
-   🚀 실행 준비 완료
+   실행 준비 완료!
 ══════════════════════════════════════════════════════════════
 
 실행할 프로젝트를 선택해주세요:
 
-  [1] 📁 쿠팡 입점 준비 (3 tasks)
-      └─ 예상 소요: 트렌드 조사, 경쟁사 분석, 카테고리 선정
-
-  [2] 📁 제품 소싱 (2 tasks)
-      └─ 예상 소요: 제품 검색, 공급업체 리스트
-
-  [3] 📁 상품 등록 (3 tasks)
-      └─ 예상 소요: 디자인, 사진 편집, 등록
-
-  [A] 모든 프로젝트 순차 실행
+  [1] 시장 조사 및 경쟁사 분석 (3 tasks)
+  [2] 콘텐츠 전략 및 소재 준비 (3 tasks)
+  [3] 계정 설정 및 브랜딩 (3 tasks)
+  [4] 초기 콘텐츠 제작 및 론칭 (3 tasks)
+  [5] 성장 전략 및 커뮤니티 빌딩 (3 tasks)
+  [6] 운영 자동화 및 분석 시스템 (3 tasks)
 
 선택:
 ```
 
-### Step 8: Expert 태스크 실행
+### Step 7: Task Briefing (v4 핵심)
 
-선택된 프로젝트의 태스크를 실행합니다.
+CEO가 프로젝트를 선택하면, **각 태스크별로 실행 계획을 보고**합니다.
 
 ```
 ══════════════════════════════════════════════════════════════
-   ⚡ 실행 중: 프로젝트 1 - 쿠팡 입점 준비
+  프로젝트 4: 초기 콘텐츠 제작 및 론칭
+  실행 계획 (3 tasks)
 ══════════════════════════════════════════════════════════════
 
-📋 Task 1.1: 시장 트렌드 조사
-   담당: 트렌드 리서처
-   Tool: WebSearch
+  [1] Task 010: 론칭용 밈 콘텐츠 30개 제작
+      담당: 밈 콘텐츠 제작 전문가 (expert-004)
+      Tool: Gemini 이미지 생성 + Imgflip API + PIL
+      출력: PNG 30개 (1080x1080)
+      의존: task-004 (밈 소재), task-009 (비주얼 가이드라인)
 
-   [실행 중...] 2025년 쿠팡 인기 카테고리 검색
-   [결과]
-   • 생활용품: 전년 대비 23% 성장
-   • 건강식품: 전년 대비 45% 성장
-   • 반려동물: 전년 대비 38% 성장
+  [2] Task 011: 캡션 및 해시태그 작성
+      담당: 밈 콘텐츠 제작 전문가 (expert-004)
+      Tool: Read + Write
+      출력: Markdown 문서
+      의존: task-010, task-006
 
-   ✅ 완료
+  [3] Task 012: 론칭 체크리스트 (CEO 승인 필요)
+      담당: 밈 콘텐츠 제작 전문가 (expert-004)
+      Tool: Read + Write + Glob
+      출력: 체크리스트 문서
+      의존: task-007, task-008, task-011
 
-📋 Task 1.2: 경쟁사 분석
-   담당: 트렌드 리서처
-   Tool: WebSearch, WebFetch
+──────────────────────────────────────────────────────────────
+  수정하실 태스크가 있으면 번호를 말씀해주세요.
+  레퍼런스를 첨부하시려면 "task-010에 [URL/파일/메모] 추가"
+  Tool을 변경하시려면 "task-010은 Imgflip API 써줘"
+  전체 OK면 "승인" 또는 "실행"
+══════════════════════════════════════════════════════════════
+```
 
-   [실행 중...] 경쟁사 리스트 수집
+### Step 8: CEO 태스크별 승인/수정
+
+CEO의 개입 유형:
+
+| 유형 | 예시 | 결과 |
+|------|------|------|
+| **승인** | "OK", "전부 승인" | briefing_approved = true → 실행 |
+| **Tool 변경** | "task-010은 Imgflip API 써줘" | ceo_tools 업데이트 |
+| **레퍼런스 추가** | "이 이미지 참고해" (파일/URL/메모) | → Step 9 분석 |
+| **지시사항** | "PNG 출력, AI 티 내지 마" | ceo_instructions 업데이트 |
+| **일괄 승인** | "전부 OK" | 모든 태스크 한번에 승인 |
+
+CEO 개입 예시:
+```
+CEO: "task-010은 Imgflip API로 클래식 밈 만들고,
+      Gemini로 커스텀 일러스트도 만들어줘.
+      이 이미지들 참고해" (이미지 첨부)
+      "PNG로 출력해줘. AI 만든 티 나면 안 돼."
+
+→ 업데이트:
+  [1] Task 010: 론칭용 밈 콘텐츠 30개 제작  [수정됨]
+      담당: 밈 콘텐츠 제작 전문가
+      Tool: Imgflip API + Gemini 이미지 생성 + PIL    ← 변경
+      레퍼런스: CEO 제공 이미지 (style)                 ← 추가
+      지시: PNG 출력, AI 티 제거                        ← 추가
+
+CEO: "OK 승인"
+→ 실행 시작
+```
+
+저장: `company/state/task_assignments.json` (ceo_tools, ceo_references, ceo_instructions 업데이트)
+
+### Step 9: 레퍼런스 분석 + Tool 조정 (필요시만)
+
+CEO가 레퍼런스를 첨부한 경우에만 **tool-agent 호출**.
+"Analyze Once, Use Everywhere" 원칙에 따라 분석합니다.
+
+분석 프로세스:
+1. 레퍼런스 타입 + 의도(intent) 분석
+2. URL → WebFetch / 이미지 → Read / 파일 → Read / 메모 → 키워드 추출
+3. analyzed_content에 저장 (fetched_summary, key_findings, style_elements, actionable_insights)
+4. direction(방향성) 도출
+5. enriched_description(상세 태스크 설명) 생성
+6. CEO 요청 Tool 가용성 확인 (인벤토리에서 조회)
+
+저장: `company/state/task_assignments.json` 내 해당 태스크의 ceo_references.analyzed_content, enriched_description, direction
+
+### Step 10: 태스크 실행 (자동 병렬)
+
+**expert-agent 호출**: dependency_graph 기반으로 자동 병렬 실행
+
+```
+══════════════════════════════════════════════════════════════
+   실행 중: 프로젝트 4 - 초기 콘텐츠 제작 및 론칭
+══════════════════════════════════════════════════════════════
+
+의존성 분석:
+  task-010: 선행 완료 → 바로 실행
+  task-011: task-010 의존 → 대기
+  task-012: task-011 의존 → 대기
+
+[실행] Task 010: 론칭용 밈 콘텐츠 30개 제작
+   담당: 밈 콘텐츠 제작 전문가
+   Tool: Imgflip API + Gemini + PIL
+   레퍼런스: analyzed_content 참조
+   지시: PNG 출력, AI 티 제거
+
+   결과: company/outputs/memes/meme_001.png ~ meme_030.png
+   완료
+
+[실행] Task 011: 캡션 및 해시태그 작성 (task-010 완료 → 시작)
    ...
+
+[실행] Task 012: 론칭 체크리스트 (task-011 완료 → 시작)
+   ...
+```
+
+독립 태스크가 여러 개인 경우 자동 병렬:
+```
+[병렬 실행]
+  task-004 (독립) ──┐
+  task-006 (독립) ──┤ 동시 실행!
+                    ↓
+  task-005 (task-004 의존) → 순차
 ```
 
 저장: `company/state/execution_log.json`
 
-### Step 9: 결과 보고
+### Step 11: 결과 보고
 
 ```
 ══════════════════════════════════════════════════════════════
-   📊 프로젝트 완료 보고서
+   프로젝트 완료 보고서
 ══════════════════════════════════════════════════════════════
 
-프로젝트: 쿠팡 입점 준비
-상태: ✅ 완료
-소요 시간: 약 15분
+프로젝트: 초기 콘텐츠 제작 및 론칭
+상태: 완료
 
 결과물:
-  1. 시장 트렌드 조사 보고서
-  2. 경쟁사 분석표
-  3. 추천 제품 카테고리 목록
+  1. 밈 이미지 30개 (PNG 1080x1080)
+     → company/outputs/memes/
+  2. 캡션 및 해시태그 목록
+     → company/outputs/task011_captions.md
+  3. 론칭 체크리스트
+     → company/outputs/task012_checklist.md
 
-다음 단계 제안:
-  → 프로젝트 2 (제품 소싱) 실행 권장
+다음 프로젝트:
+  [5] 성장 전략 및 커뮤니티 빌딩 (3 tasks)
+  [6] 운영 자동화 및 분석 시스템 (3 tasks)
 
 계속하시겠습니까? [다음 프로젝트] [종료]
 ```
 
-## 상태 파일 구조
+## 상태 파일 구조 (v4)
 
 ```
 company/state/
-├── session.json           # 세션 정보 (phase, created_at)
-├── ceo_goal.json          # CEO 목표
-├── backlog.json           # RM 생성 백로그
-├── tool_selections.json   # CEO Tool 선택
-├── tool_validations.json  # Tool Agent 검증 결과
-├── hired_agents.json      # HR 고용 에이전트
-├── task_assignments.json  # 태스크 할당 정보
-└── execution_log.json     # 실행 로그
+├── session.json              # 세션 정보 (phase, current_project)
+├── ceo_goal.json             # CEO 목표
+├── backlog.json              # RM 백로그 + dependency_graph
+├── tool_inventory.json       # Tool 인벤토리
+├── hired_agents.json         # 역량 기반 에이전트
+├── task_assignments.json     # 할당 + CEO 승인/레퍼런스/지시사항
+└── execution_log.json        # 실행 로그
+```
+
+## 상태 전이 (Phase)
+
+```
+Phase 1:
+  goal_input → backlog_creation → tool_inventory → hiring → assignment → ready_to_execute
+
+Phase 2 (프로젝트 단위 반복):
+  project_selection → task_briefing → ceo_review → executing → project_completed
+  → project_selection (다음 프로젝트)
+
+전체 완료:
+  all_completed
 ```
 
 ## 사용 가능한 Tool 목록
@@ -361,18 +401,39 @@ company/state/
 ### Skills (설치된 경우)
 - `/frontend-design` - 웹 UI 코드 생성
 - `/mcp-builder` - MCP 서버 생성
-- `/pdf`, `/docx`, `/xlsx` - 문서 처리
 - 기타 `.claude/skills/` 디렉토리의 스킬들
 
 ### MCP (설정된 경우)
+- `rube` - 외부 서비스 통합 허브 (500+ 앱: Instagram, Gemini, Canva, Gmail, Slack 등)
 - `figma` - Figma 디자인 연동
-- `rube` - 워크플로우 자동화
 - `github` - GitHub 연동
 - 기타 설정된 MCP 서버들
+
+## 레퍼런스 시스템 (Just-In-Time)
+
+v4에서 레퍼런스는 Phase 1이 아닌 **Phase 2 Task Briefing에서 태스크별로** 수집합니다.
+
+**레퍼런스 타입:**
+- URL: 웹 주소 (경쟁사, 참고 디자인 등)
+- 이미지: 이미지 파일 경로 (목업, 스크린샷 등)
+- 파일: 로컬 파일 경로 (보고서 템플릿, 데이터셋 등)
+- 메모: 텍스트 메모 (스타일 가이드, 톤앤매너 등)
+
+**레퍼런스 의도(intent):**
+- `style`: "이런 스타일로 만들어줘"
+- `content`: "이 내용을 참고해줘"
+- `template`: "이 형식을 따라줘"
+- `data`: "이 데이터를 활용해줘"
+- `competitor`: "이 경쟁사를 분석해줘"
+
+**분석 원칙 (Analyze Once, Use Everywhere):**
+Tool Agent가 1번만 깊게 분석 → analyzed_content에 저장 → Expert가 읽기만
 
 ## 주의사항
 
 1. 이 스킬은 **Claude Code 환경**에서만 동작합니다
-2. MCP 서버 사용 시 사전 설정이 필요합니다
+2. MCP 서버 사용 시 사전 설정이 필요합니다 (`.mcp.json`)
 3. 상태 파일은 `company/state/` 폴더에 JSON으로 저장됩니다
 4. 세션 종료 후에도 상태가 유지되어 계속 진행 가능합니다
+5. 레퍼런스는 **Task Briefing 시점에** 태스크별로 제공합니다 (Phase 1에서 일괄 수집하지 않음)
+6. dependency_graph 기반 자동 병렬 실행을 위해 독립 태스크를 최대한 식별합니다
