@@ -1,113 +1,146 @@
 # AI Company 구현 계획서 v1
 
-> 작성일: 2026-03-03
+> 최초 작성: 2026-03-03
+> 최종 업데이트: 2026-03-03 (세션 1 개선 작업 반영)
 > 목적: 현재 시스템의 근본 문제를 진단하고, 단계별 개선 계획을 수립한다.
+
+---
+
+## 변경 이력
+
+| 버전 | 날짜 | 주요 변경 |
+|------|------|----------|
+| v1.0 | 2026-03-03 | 최초 작성 — 진단 + 즉시/단기/중기 계획 |
+| v1.1 | 2026-03-03 | 세션 1 개선 반영: QA 에이전트 추가, 시스템 일반화, 완료 항목 표시, Rube 연결 상태 오진단 수정 |
 
 ---
 
 ## 0. 현재 상태 정확한 진단: "실제 실행 vs 시뮬레이션"
 
-### 실제로 동작한 것과 아닌 것
+### 실제로 동작한 것과 아닌 것 (초기 MBTI 인스타그램 데모 기준)
 
 | 태스크 | 실제 실행 여부 | 근거 | 산출물 품질 |
 |--------|--------------|------|------------|
 | task-001~004 (시장조사) | ✅ 실제 실행 | WebSearch/WebFetch 사용, 실제 웹 데이터 수집 | 양호 |
 | task-005 (브랜드 아이덴티티) | ⚠️ 문서만 생성 | tools_used: Read, Write, WebSearch만 사용. 실제 이미지 없음 | 텍스트 가이드만 존재 |
-| task-006 (인스타 계정 설정) | ⚠️ 가이드만 생성 | "Rube MCP 자동 업로드 파이프라인 **설계**" → 설계만 함, 실행 안 함 | 문서만 존재 |
+| task-006 (계정 설정) | ⚠️ 가이드만 생성 | "Rube MCP 자동 업로드 파이프라인 **설계**" → 설계만 함, 실행 안 함 | 문서만 존재 |
 | task-007 (캐릭터 디자인) | ⚠️ 텍스트 묘사만 | tools_used: Read, Write, WebSearch. 실제 캐릭터 이미지 없음 | AI 프롬프트 텍스트만 존재 |
 | task-008 (스크립트) | ✅ 실제 실행 | 텍스트 산출물이 목표. 실제 스크립트 작성됨 | 양호 |
 | task-009 (만화 제작 1차) | ⚠️ PIL만으로 시도 | 이모지 깨짐 문제 발생. Bash + PIL로 기본 이미지 생성 | 품질 낮음 |
-| task-009-v2 (카드 제작 CEO 피드백 반영) | ✅ **실제로 동작함** | `GEMINI_GENERATE_IMAGE` + PIL로 실제 PNG 파일 생성됨. CEO "대박!" 반응 | **실제 이미지 4개 존재** |
+| task-009-v2 (카드 제작 CEO 피드백 반영) | ✅ **실제로 동작함** | `GEMINI_GENERATE_IMAGE` + PIL로 실제 PNG 파일 생성됨 | **실제 이미지 4개 존재** |
 | task-010 (캡션/해시태그) | ✅ 실제 실행 | 텍스트 산출물이 목표 | 양호 |
-| task-011~013 (업로드/스케줄링) | ❌ 미실행 | briefing_approved=false, Instagram 연결 없음 | 없음 |
+| task-011~013 (업로드/스케줄링) | ❌ 미실행 | briefing_approved=false, 외부 서비스 연결 없음 | 없음 |
 
 ### 핵심 발견
 
 **task-009-v2가 실제로 동작한 유일한 이미지 생성 사례다.**
 이 태스크에서 `GEMINI_GENERATE_IMAGE`가 실제로 호출됐고, 결과물이 존재한다.
-그러나 이후 `tool_inventory.json`에는 gemini가 `not_connected`로 기록되어 있다.
-→ **Rube MCP Gemini 연결이 일시적이었거나, 인벤토리 생성 시점이 연결 이전이었음을 의미한다.**
+그러나 `tool_inventory.json`에는 gemini가 `not_connected`로 기록되어 있었다.
+
+→ **`tool_inventory.json`이 과거 시점의 스냅샷이었기 때문이다.** 실제로 Rube MCP를 통해 `RUBE_MANAGE_CONNECTIONS`를 호출하면 instagram, gemini, canva 모두 `ACTIVE` 상태였다. 즉, 도구는 연결되어 있었지만 시스템이 이를 모르고 있었다.
 
 ---
 
 ## 1. 현재 구조의 문제와 한계
 
-### 문제 1: Rube MCP 연결이 실제로 없다 (가장 근본적인 문제)
+### 문제 1: ~~Rube MCP 연결이 없다~~ → **스냅샷이 오래됐다** (수정된 진단)
+
+> ⚠️ **v1.0 오진단 수정**: 최초 진단 시 `tool_inventory.json`을 신뢰하여 Rube가 연결 안 됐다고 판단했으나, 실제로는 instagram/gemini/canva 모두 ACTIVE 상태였다.
+
+**실제 문제:**
 
 ```
-tool_inventory.json 상태:
-  instagram    → not_connected   ← Instagram 업로드 불가
-  gemini       → not_connected   ← AI 이미지 생성 불가 (Rube 경유 시)
-  canva        → not_connected   ← 디자인 도구 불가
-  google_sheets → not_connected  ← 데이터 관리 불가
-```
+tool_inventory.json (2026-01월 생성 스냅샷):
+  instagram    → not_connected  ← 오래된 스냅샷
+  gemini       → not_connected  ← 오래된 스냅샷
+  canva        → not_connected  ← 오래된 스냅샷
 
-Expert 에이전트는 `feasible_tools`에 이 도구들이 나열되어 있지만,
-실제로 도구가 없기 때문에 호출 시 실패하거나 다른 방식으로 대체한다.
+RUBE_MANAGE_CONNECTIONS 실시간 확인:
+  instagram    → ACTIVE ✅
+  gemini       → ACTIVE ✅
+  canva        → ACTIVE ✅
+```
 
 **왜 이런 상태가 됐나:**
-- `.mcp.json`에 Rube 서버 URL만 있고, OAuth 인증(rube.app/marketplace)이 완료되지 않음
-- Tool Agent가 인벤토리 생성 시 `RUBE_MANAGE_CONNECTIONS`를 통해 상태를 확인했고, 모두 `not_connected`로 기록
-- 이 상태 그대로 진행됨 → HR, RM, Expert 모두 연결 안 된 도구를 "쓸 수 있는 것처럼" 정의함
+- Tool Agent가 인벤토리 생성 당시 Rube가 연결되지 않은 상태였음
+- 이후 Rube가 연결됐지만 인벤토리가 재생성되지 않음
+- 오래된 스냅샷을 신뢰한 Expert/HR 에이전트들이 연결 안 된 도구를 기피
+
+**해결책 (구현 완료 v1.1):**
+- tool-agent.md에 "Tool Agent는 항상 RUBE_MANAGE_CONNECTIONS로 실시간 확인" 명시
+- expert-agent.md에 Rube 3단계 호출 패턴 명시 (SEARCH → CONNECTIONS → EXECUTE)
 
 ---
 
 ### 문제 2: Expert 에이전트가 "계획"을 실행하지 않고 "문서"를 생성한다
 
-action 유형 태스크에서 기대했던 것:
+ACTION 유형 태스크에서 기대했던 것:
 ```
-task-006 (계정 설정): 실제로 Instagram 계정을 Business 계정으로 전환하고, 프로필 설정
-task-007 (캐릭터 디자인): 실제 PNG 이미지 파일 생성
-task-005 (브랜드 아이덴티티): 실제 로고, 색상 팔레트 이미지 생성
+외부 서비스 연동 태스크: 실제로 서비스를 호출하고 결과(ID, URL 등)를 반환
+파일 생성 태스크: 실제 파일이 outputs/에 존재
 ```
 
 실제로 일어난 것:
 ```
-task-006: Instagram Graph API 연동 방법 문서 작성 (설계서)
-task-007: MBTI 캐릭터의 외형 텍스트 묘사 + AI 프롬프트 작성
-task-005: 색상 코드와 폰트 이름이 담긴 브랜드 가이드 문서 작성
+외부 서비스 태스크: "이렇게 연동하면 됩니다" 가이드 문서 작성
+파일 생성 태스크: 파일 생성 방법을 설명하는 텍스트 문서 작성
 ```
 
 **왜 이런 상태가 됐나:**
-- Expert 에이전트의 프롬프트가 "어떻게 해야 한다"는 가이드 중심이며, 실제 실행을 강제하지 않음
-- 도구가 없으면 (Rube not_connected), 에이전트는 합리적으로 "할 수 있는 것"인 문서 생성으로 우회
-- "실행했다"와 "계획을 문서로 만들었다"가 execution_log에서 구분되지 않음
-- 태스크 타입이 `ACTION`이어도 검증 없이 `completed`로 처리됨
+- Expert 에이전트 프롬프트가 "어떻게 해야 한다"는 가이드 중심
+- 도구 호출 실패 시 문서 작성으로 조용히 우회
+- `ACTION` 타입이어도 검증 없이 `completed` 처리
+- "설명 문서를 작성했다"와 "실제로 실행했다"가 execution_log에서 구분되지 않음
+
+**해결책 (구현 완료 v1.1):**
+- expert-agent.md에 ACTION 태스크 완료 기준 명시
+- 파일 없음/post_id 없음 → completed 불가
+- 도구 연결 실패 → TOOL_ERROR 인터럽트 발생 (조용한 우회 금지)
 
 ---
 
-### 문제 3: 이미지 생성 파이프라인이 결정론적이지 않다
+### 문제 3: 결과물 품질 검증 루프가 없다
 
-n8n의 이미지→Instagram 파이프라인은 명확한 단계로 분해된다:
 ```
-[이미지 생성] → [공개 URL 호스팅] → [미디어 컨테이너 생성] → [처리 대기] → [게시]
+현재 흐름:
+  Expert 실행 → execution_log에 "completed" 기록 → 종료
+
+이상적인 흐름:
+  Expert 실행 → QA 검증 → 70점 미만: 반려+피드백 → 재시도 → QA 재검증 → 승인
+```
+
+**왜 이런 상태가 됐나:**
+- 결과물이 태스크 요구사항을 충족하는지 자동으로 확인하는 단계가 없었음
+- CEO가 직접 결과물을 확인하고 수동으로 재시도를 요청해야 했음
+- 3번 이상 품질이 안 좋으면 CEO가 직접 개입할 방법이 없었음
+
+**해결책 (구현 완료 v1.1):**
+- qa-agent.md 신규 생성: LLM-as-Judge 패턴, 0~100점 채점, 70점 이상 승인
+- SKILL.md 워크플로우에 QA 루프 추가 (Expert → QA → approve/reject → 최대 3회)
+- task_assignments.json에 qa_status, qa_score, qa_rejection_feedback 필드 추가
+- 3회 초과 시 CEO 에스컬레이션 (qa_escalation 인터럽트)
+
+---
+
+### 문제 4: Expert 실행이 결정론적이지 않다
+
+n8n의 파이프라인은 명확한 단계로 분해된다:
+```
+[데이터 수집] → [처리] → [변환] → [저장/전송] → [확인]
 ```
 
 현재 Expert 에이전트 방식:
 ```
-"만화 이미지를 만들어라" → (AI가 알아서 판단) → 결과 파일 저장
+"태스크를 실행해라" → (AI가 알아서 판단) → 결과 저장
 ```
 
-- 이미지가 생성돼도 공개 URL로 호스팅하는 단계가 없음
-- Instagram Graph API는 로컬 파일 직접 업로드 불가 (공개 URL 필수)
-- 생성 실패 시 폴백 경로 없음
 - 같은 태스크를 다시 실행해도 동일한 결과 보장 없음
+- 실패 지점이 불명확 → 어디서 틀렸는지 파악 어려움
+- QA가 반려해도 Expert가 무엇을 고쳐야 할지 불명확
 
----
-
-### 문제 4: Instagram 업로드가 구조적으로 불가능하다
-
-Instagram Graph API의 필수 요구사항:
-
-| 요구사항 | 현재 상태 |
-|---------|----------|
-| Instagram Business/Creator 계정 | 미확인 (task-006은 가이드만 작성) |
-| Meta Developer App 등록 | 미완료 |
-| Access Token (Page Access Token) | 없음 |
-| 이미지 공개 URL (CDN/호스팅) | 없음 |
-| 2-step 업로드 프로세스 구현 | 없음 |
-
-→ task-011 (초기 10개 업로드)은 현재 구조에서는 실행 자체가 불가능하다.
+**해결 방향 (단기 목표):**
+- 태스크 유형별 실행 단계를 명시적으로 분해
+- 각 단계 실패 시 TOOL_ERROR 즉시 발생 (다음 단계 진행 불가)
 
 ---
 
@@ -127,229 +160,118 @@ hired_agents.json에 4명의 에이전트 정의가 저장됨
 
 **왜 이런 상태가 됐나:**
 - Claude Code의 Agent tool은 미리 정의된 subagent 파일만 호출할 수 있음
-- `hired_agents.json`이 생성됐다고 해서 새로운 `.claude/agents/expert-XXX.md` 파일이 자동 생성되지 않음
-- HR 에이전트가 JSON 파일만 만들고, 실제 agent 정의 파일 생성까지 하지 않음
+- `hired_agents.json`이 생성됐다고 해서 `.claude/agents/expert-XXX.md` 파일이 자동 생성되지 않음
+- HR 에이전트가 JSON 파일만 만들고 실제 agent 정의 파일 생성까지 하지 않음
+
+**해결책 (구현 완료 v1.1):**
+- hr-agent.md에 agent 파일 생성 책임 추가
+- `hired_agents.json` 생성 직후 `.claude/agents/expert-{id}.md`도 생성
+- 각 파일에 역할 특화 YAML frontmatter + 시스템 프롬프트 작성
 
 ---
 
-### 문제 6: 상태 파일과 실제 실행 결과 사이의 검증이 없다
+### 문제 6: 상태 파일과 실제 실행 결과 사이의 검증이 없다 (문제 3과 연관)
 
 ```
-execution_log.json의 task-006:
+execution_log.json:
   status: "completed"
-  summary: "Rube MCP 자동 업로드 파이프라인 설계 완료"
+  summary: "파이프라인 설계 완료"
 
-→ "완료"라고 기록되어 있지만, 실제로는 업로드 파이프라인이 없음
-→ 이후 단계(task-011 업로드)가 이 "완료"를 신뢰하고 진행하려 하면 실패
+→ "완료"라고 기록되어 있지만, 실제로는 실행이 아닌 설계서만 존재
+→ 이후 의존 태스크가 이 "완료"를 신뢰하고 진행하려 하면 실패
 ```
 
-현재 아키텍처에는 "이 태스크가 실제로 ACTION을 수행했는가?" 검증 단계가 없다.
+→ QA 에이전트 추가로 부분 해결. qa_status 필드로 실제 검증 상태 추적 가능.
+
+---
+
+### 문제 7: 시스템이 특정 도메인(인스타그램)에 종속되어 있었다
+
+초기 설계에서 에이전트 프롬프트, 예시, 역할 정의가 모두 "MBTI 인스타그램 계정 운영"에 특화되어 있었다. 다른 목표(예: 이커머스 분석, 이메일 마케팅, 코드 리뷰 자동화)를 CEO가 입력하면 시스템이 엉뚱하게 동작했다.
+
+**해결책 (구현 완료 v1.1):**
+- SKILL.md, hr-agent.md, tool-agent.md, expert-agent.md의 모든 도메인 특화 예시를 일반화
+- "인스타그램", "밈", "@cs_student_tips" 같은 고정 예시 제거
+- CEO 목표에 따라 백로그/에이전트/도구가 동적으로 결정되도록 수정
 
 ---
 
 ## 2. 의도와 다르게 동작한 이유 (근본 원인)
 
-### 근본 원인 A: "도구 연결"과 "도구 정의"를 혼동
+### 근본 원인 A: 스냅샷을 실시간 상태로 오인
 
 ```
-tool_inventory.json에 gemini가 listed → Expert가 gemini를 쓸 수 있다고 인식
-그러나 actually → Rube OAuth 연결 없으면 gemini 호출 = 에러
+tool_inventory.json 생성 시점의 Rube 연결 상태 → 이후 변경된 상태를 반영 못함
+→ Expert/HR이 연결 안 된 도구라고 판단 → 우회 행동 발생
 ```
 
-해결 전략: 도구 가용성을 런타임에 검증하거나, 연결된 도구만 사용
+→ 해결: Tool Agent는 항상 RUBE_MANAGE_CONNECTIONS 실시간 호출
 
 ---
 
-### 근본 원인 B: Action 태스크가 Document 태스크처럼 처리됨
+### 근본 원인 B: ACTION 태스크 완료 기준이 모호했다
 
-Expert 에이전트 프롬프트 구조:
 ```
-"task_assignments.json에서 태스크를 읽어라 → enriched_description 따라 실행 → 결과를 outputs/에 저장"
+"실행"의 의미가 에이전트마다 달랐음:
+  Expert 해석: "outputs/에 무언가를 저장했으면 완료"
+  설계 의도:   "실제 파일/API 결과가 존재해야 완료"
 ```
 
-"실행"의 의미가 모호함:
-- 이미지 생성 태스크 → 이미지를 만들어야 함
-- 하지만 도구가 없으면 → 이미지를 어떻게 만들어야 하는지 설명하는 문서를 만듦
-- 에이전트 입장에서는 "산출물을 outputs/에 저장했으니 완료"
-
-해결 전략: 태스크 타입(ACTION vs DOCUMENT)에 따른 산출물 검증 기준 명시
+→ 해결: 완료 기준을 타입별로 명시 (파일 생성 / 외부 서비스 post_id / 코드 실행 로그)
 
 ---
 
-### 근본 원인 C: Rube MCP가 프로젝트의 단일 실패 지점
+### 근본 원인 C: 실패 시 조용한 우회가 허용됐다
 
-시스템 전체가 Rube MCP 연결에 의존하도록 설계:
 ```
-Instagram 업로드 → Rube → not_connected → 실패
-Gemini 이미지 생성 → Rube → not_connected → 실패
+n8n: [API 호출] → 실패 → [Error Branch] → 명시적 에러 알림
+기존: [API 호출] → 실패 → "대신 문서 만들었습니다" → completed
 ```
 
-Rube가 없으면 Expert가 할 수 있는 것: 텍스트 작성, 웹 검색, 기본 Python 스크립트
-
-해결 전략: Rube 없이도 동작하는 직접 API 경로를 기본으로 구현
+→ 해결: 실행 불가 상황에서 TOOL_ERROR 인터럽트 의무화, QA가 이를 0점 처리
 
 ---
 
-### 근본 원인 D: n8n과 달리 실패 감지/복구 메커니즘이 없다
+### 근본 원인 D: 결과물을 검증하는 독립적인 관찰자가 없었다
 
-n8n 노드는 실패하면 즉시 명시적 에러를 발생시키고 Error Branch로 분기
-현재 Expert 에이전트는 실패하면 할 수 있는 방향으로 조용히 우회하고 "completed" 처리
+Expert 에이전트가 스스로 "완료"를 선언하는 구조였다. 자기 평가는 편향될 수밖에 없다.
 
 ```
-n8n: [Gemini API] → 실패 → [Error Branch] → "Gemini 연결 실패: Access Denied" 알림
-현재: [Gemini API] → 실패 → "대신 PIL로 간단한 이미지 만들었습니다" → completed
+기존: Expert → "완료" 선언 → 다음 태스크
+개선: Expert → QA(독립 평가) → 승인/반려 → 재시도 또는 다음 태스크
 ```
+
+→ 해결: QA 에이전트를 별도 컨텍스트에서 실행하는 독립 검증자로 추가
 
 ---
 
-### 근본 원인 E: HR 에이전트의 에이전트 "고용"이 파일 생성에 그침
+### 근본 원인 E: 시스템이 특정 데모 시나리오에 과적합되어 있었다
 
-HR 에이전트가 `hired_agents.json`을 만드는 것은 "고용 기록"이지 "실제 에이전트 생성"이 아님
-실제 독립 에이전트가 되려면 `.claude/agents/expert-001.md`와 같은 파일이 생성되어야 함
-그리고 그 파일에 해당 전문가에 맞는 시스템 프롬프트가 작성되어야 함
+에이전트 프롬프트가 인스타그램 MBTI 계정 운영이라는 단일 시나리오에 맞춰 설계됐다. 일반화 부재로 인해 다른 목표를 입력하면 에이전트들이 맥락에 맞지 않는 행동을 했다.
 
 ---
 
-## 3. 즉시 해결책 (Immediate — 이번 주 내)
+## 3. 구현 작업 현황
 
-### [즉시-1] Gemini API 직접 연결 (Rube 우회)
+### 세션 1 완료 항목 (2026-03-03)
 
-**문제**: Rube MCP의 Gemini가 not_connected
-**해결**: 환경변수로 Gemini API 키 직접 설정 → Bash에서 Python으로 직접 호출
-
-구현 방법:
-```bash
-# 환경변수 설정
-export GEMINI_API_KEY="your-api-key"
-
-# expert-agent.md에 추가할 Bash 실행 패턴
-python3 - <<'EOF'
-import google.generativeai as genai
-import base64, os
-
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-2.0-flash-exp-image-generation")
-response = model.generate_content(
-    "kawaii owl character, INTJ, dark purple, cute anime style",
-    generation_config={"response_modalities": ["IMAGE"]}
-)
-with open("output.png", "wb") as f:
-    f.write(base64.b64decode(response.candidates[0].content.parts[0].inline_data.data))
-EOF
-```
-
-**수정 대상**: `expert-agent.md` — 이미지 생성 시 Rube 대신 직접 API 호출 패턴 명시
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| ✅ ACTION 태스크 완료 기준 명시 | expert-agent.md | 파일 없음/post_id 없음 → completed 불가, TOOL_ERROR 의무화 |
+| ✅ Rube MCP 3단계 호출 패턴 | expert-agent.md | RUBE_SEARCH_TOOLS → RUBE_MANAGE_CONNECTIONS → RUBE_MULTI_EXECUTE_TOOL |
+| ✅ 재시도 시 qa_rejection_feedback 우선 확인 | expert-agent.md | QA 반려 후 재실행 시 피드백 반드시 읽도록 강제 |
+| ✅ QA 에이전트 추가 | qa-agent.md (신규) | 0~100점 채점, 70점 기준 승인/반려, 최대 3회 재시도, CEO 에스컬레이션 |
+| ✅ QA 루프 워크플로우 반영 | SKILL.md | Step 10에 Expert → QA → approve/reject 루프 추가 |
+| ✅ HR 에이전트 agent 파일 생성 책임 추가 | hr-agent.md | hired_agents.json + .claude/agents/expert-{id}.md 동시 생성 |
+| ✅ 시스템 일반화 (인스타그램 종속 제거) | SKILL.md, hr-agent.md, tool-agent.md | 도메인 특화 예시 → 범용 예시로 대체 |
+| ✅ Phase 0 환경 체크 추가 | SKILL.md | company/state/ 폴더, .mcp.json, 기존 세션 여부 확인 단계 |
+| ✅ tool_inventory.json 실시간 재확인 지침 | tool-agent.md | RUBE_MANAGE_CONNECTIONS 항상 실시간 호출하도록 명시 |
 
 ---
 
-### [즉시-2] Meta Graph API로 Instagram 업로드 파이프라인 구현
+## 4. 단기 목표 (Short-term — 2주 내)
 
-**문제**: Instagram 업로드 경로가 설계만 있고 구현이 없음
-**해결**: Meta Graph API 2-step 프로세스를 Expert가 직접 실행하는 스크립트로 구현
-
-필요 선행 작업 (사람이 1회 직접 해야 함):
-1. [developers.facebook.com](https://developers.facebook.com)에서 App 생성
-2. Instagram Basic Display API 또는 Instagram Graph API 권한 획득
-3. Long-lived Access Token 발급 (60일 유효)
-4. Instagram Business Account ID 확인
-
-구현할 파이프라인:
-```python
-# company/assets/scripts/instagram_upload.py
-import requests, time, sys
-
-ACCESS_TOKEN = os.environ["INSTAGRAM_ACCESS_TOKEN"]
-IG_USER_ID = os.environ["INSTAGRAM_USER_ID"]
-
-def upload_to_instagram(image_url: str, caption: str) -> str:
-    """
-    Step 1: 미디어 컨테이너 생성
-    Step 2: 처리 완료 대기 (최대 60초)
-    Step 3: 게시
-    """
-    # Step 1
-    res = requests.post(
-        f"https://graph.facebook.com/v19.0/{IG_USER_ID}/media",
-        data={"image_url": image_url, "caption": caption, "access_token": ACCESS_TOKEN}
-    )
-    container_id = res.json()["id"]
-
-    # Step 2: 처리 대기
-    for _ in range(12):
-        status = requests.get(
-            f"https://graph.facebook.com/v19.0/{container_id}",
-            params={"fields": "status_code", "access_token": ACCESS_TOKEN}
-        ).json().get("status_code")
-        if status == "FINISHED":
-            break
-        time.sleep(5)
-
-    # Step 3: 게시
-    res = requests.post(
-        f"https://graph.facebook.com/v19.0/{IG_USER_ID}/media_publish",
-        data={"creation_id": container_id, "access_token": ACCESS_TOKEN}
-    )
-    return res.json().get("id")
-```
-
-이미지 공개 URL 문제 해결 - imgbb 무료 호스팅:
-```python
-# 로컬 이미지를 공개 URL로 임시 호스팅
-def upload_image_to_imgbb(image_path: str) -> str:
-    import base64
-    IMGBB_API_KEY = os.environ["IMGBB_API_KEY"]  # 무료, 하루 32MB
-    with open(image_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
-    res = requests.post(
-        "https://api.imgbb.com/1/upload",
-        data={"key": IMGBB_API_KEY, "image": b64}
-    )
-    return res.json()["data"]["url"]
-```
-
-**수정 대상**: `company/assets/scripts/` 폴더에 스크립트 파일 생성
-
----
-
-### [즉시-3] Expert 에이전트의 ACTION 태스크 검증 기준 명시
-
-**문제**: Expert가 이미지 생성 대신 텍스트 문서를 만들어도 completed로 처리됨
-**해결**: `expert-agent.md`에 태스크 타입별 산출물 검증 조건 추가
-
-```markdown
-## 태스크 완료 기준
-
-### ACTION 태스크 (이미지/디자인 관련)
-- ✅ 완료: outputs/ 폴더에 실제 .png, .jpg 파일이 존재
-- ❌ 미완료: "이미지를 이렇게 만들면 됩니다" 형태의 설명서만 존재
-- ❌ 미완료: AI 프롬프트만 작성되고 실제 이미지 생성 안 됨
-
-### ACTION 태스크 (SNS 업로드 관련)
-- ✅ 완료: Instagram post ID가 반환되고 execution_log에 기록됨
-- ❌ 미완료: "업로드 방법" 가이드 문서만 존재
-
-### ACTION 태스크를 수행할 수 없는 경우
-필요한 도구/인증이 없어서 실제 ACTION이 불가능하면:
-1. 즉시 TOOL_ERROR 인터럽트 발생
-2. "어떤 도구/인증이 필요한가"를 명시
-3. CEO가 해결 후 재실행
-```
-
----
-
-### [즉시-4] tool_inventory.json 실제 연결 상태 재확인
-
-현재 `tool_inventory.json`이 과거 시점의 스냅샷이어서 부정확함
-Tool Agent를 재실행하여 현재 실제 연결 상태를 반영한 인벤토리를 새로 생성해야 함
-
-또한 task-009-v2에서 `GEMINI_GENERATE_IMAGE`가 실제로 동작했다면,
-그 시점에 Rube Gemini 연결이 되어 있었던 것 → 현재도 연결 가능성 확인 필요
-
----
-
-## 4. 단기 해결책 (Short-term — 2주 내)
-
-### [단기-1] n8n 패턴 적용: Expert 실행을 결정론적 단계로 분해
+### [단기-1] Expert 실행을 결정론적 단계로 분해
 
 현재 Expert 실행 방식:
 ```
@@ -358,284 +280,224 @@ expert-agent.md → "task_assignments.json 읽고 실행해라" (비결정론적
 
 n8n 방식으로 변환:
 ```
-이미지 생성 태스크:
-  Step 1: Gemini API로 캐릭터 이미지 생성 → output.png 저장
-  Step 2: imgbb API로 공개 URL 획득
-  Step 3: PIL로 카드 합성 (1080x1080, 텍스트 오버레이, 워터마크)
-  Step 4: 최종 PNG 저장 → outputs/{task_id}_{mbti}.png
-  Step 5: execution_log.json에 결과 기록 (output_files, image_urls)
+파일 생성 태스크 예시:
+  Step 1: 필요한 도구 가용성 확인 (RUBE_MANAGE_CONNECTIONS)
+  Step 2: 데이터/콘텐츠 생성 (API 호출)
+  Step 3: 후처리 (합성, 변환, 검증)
+  Step 4: outputs/{task_id}_{name}.{ext}로 저장
+  Step 5: execution_log.json에 결과 기록 (output_files, metadata)
 ```
 
 각 단계가 실패하면 즉시 TOOL_ERROR를 발생시키고 다음 단계로 넘어가지 않음
 
-**수정 대상**: `expert-agent.md` — 태스크 유형별 실행 단계 명시
+**수정 대상**: `expert-agent.md` — 태스크 유형별 실행 단계 추가
 
 ---
 
-### [단기-2] 이미지 생성 → 업로드 통합 파이프라인
-
-```
-[Gemini API] → [캐릭터 PNG]
-      ↓
-[PIL 합성] → [카드 PNG 1080x1080]
-      ↓
-[imgbb 업로드] → [공개 URL]
-      ↓
-[Instagram 2-step] → [포스트 ID] → [execution_log 기록]
-```
-
-이 파이프라인을 `company/assets/scripts/content_pipeline.py`로 구현
-Expert 에이전트가 이 스크립트를 Bash로 호출하는 방식
-
----
-
-### [단기-3] 에러 핸들링 + 폴백 체인
+### [단기-2] 에러 핸들링 + 폴백 체인
 
 n8n의 Error Branch 개념을 적용:
 
 ```
-[Gemini API 이미지 생성]
+[Rube를 통한 도구 호출]
     │
-    ├── 성공 → PIL 합성 → 계속
+    ├── 성공 → 다음 단계
     │
     └── 실패 (API 에러/연결 불가)
          ↓
-    [폴백: Gemini API 직접 호출 (Rube 우회)]
+    [폴백: 직접 API 호출 (Rube 우회)]
          │
-         ├── 성공 → PIL 합성 → 계속
+         ├── 성공 → 다음 단계
          │
          └── 실패
               ↓
-         [폴백: PIL만으로 텍스트+색상 카드 생성]
+         [폴백: Built-in 도구(Bash+Python)로 대체]
               │
-              └── TOOL_ERROR 인터럽트 + "Gemini 연결 필요" 메시지
+              └── 실패 → TOOL_ERROR 인터럽트 발생
 ```
 
 ---
 
-### [단기-4] Access Token 자동 갱신 시스템
-
-Instagram Access Token은 60일 만료
-자동 갱신 스크립트 구현:
-
-```python
-# company/assets/scripts/refresh_token.py
-# Long-lived token을 60일마다 갱신
-# 만료 7일 전 CEO에게 알림 (실행 로그에 경고 기록)
-```
-
----
-
-### [단기-5] HR 에이전트 개선: JSON 파일 생성 → 실제 Agent 파일 생성
-
-현재:
-```
-HR 에이전트 → hired_agents.json 생성 (끝)
-```
-
-개선:
-```
-HR 에이전트 → hired_agents.json 생성
-           → .claude/agents/expert-001.md 생성 (역할 특화 프롬프트 포함)
-           → .claude/agents/expert-002.md 생성
-           → .claude/agents/expert-003.md 생성
-           → .claude/agents/expert-004.md 생성
-```
-
-각 agent 파일은 해당 역할에 맞는 YAML frontmatter + 시스템 프롬프트:
-```yaml
----
-name: visual-designer-expert
-description: MBTI 만화 캐릭터 디자인 및 이미지 생성 전문가
-tools: Read, Write, Edit, Bash, WebSearch, WebFetch, Glob, Grep
-model: claude-sonnet-4-6
----
-
-당신은 비주얼 디자이너입니다. 전문 분야:
-- Gemini API를 통한 카와이 스타일 캐릭터 생성
-- PIL/Pillow를 통한 Instagram 카드 합성 (1080x1080)
-- 브랜드 가이드라인 100% 준수
-
-[구체적인 실행 패턴, API 호출 코드 템플릿 포함]
-```
-
-**수정 대상**: `hr-agent.md` — JSON 파일 생성 외 agent 파일 생성 책임 추가
-
----
-
-### [단기-6] task_assignments.json에 ACTION 검증 필드 추가
+### [단기-3] task_assignments.json에 completion_criteria 필드 추가
 
 ```json
 {
-  "task_id": "task-011",
+  "task_id": "task-XXX",
   "type": "ACTION",
   "completion_criteria": {
     "required_outputs": [
-      {"type": "file", "pattern": "outputs/*.png", "count": 10},
-      {"type": "instagram_post_id", "count": 10}
-    ],
-    "verification_method": "check_outputs_exist_and_instagram_ids"
+      {"type": "file", "pattern": "outputs/task-XXX_*", "min_count": 1},
+      {"type": "external_id", "field": "post_id"}
+    ]
   }
 }
 ```
 
----
-
-## 5. 중기 해결책 (Mid-term — 1달 내)
-
-### [중기-1] Claude Agent Teams 활용
-
-현재: 단일 expert-agent.md 파일이 모든 역할을 처리
-목표: HR이 고용한 에이전트들이 실제로 독립 컨텍스트에서 병렬 실행
-
-```
-# settings.json에 추가
-{
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  }
-}
-```
-
-Agent Teams 구조:
-```
-Team Lead (ai-company 스킬)
-    ├── 공유 Task List (company/state/team_tasks.json)
-    ├── visual-designer-expert (독립 컨텍스트)
-    │   └── 이미지 생성, PIL 합성 전담
-    ├── content-writer-expert (독립 컨텍스트)
-    │   └── 스크립트, 캡션, 해시태그 전담
-    └── sns-manager-expert (독립 컨텍스트)
-        └── Instagram 업로드, 인게이지먼트 전담
-```
-
-**수정 대상**:
-- `ai-company/SKILL.md` — Agent Teams 오케스트레이션 로직 추가
-- HR 에이전트가 생성한 agent 파일들이 실제 Agent Teams member로 동작
+QA 에이전트가 이 기준을 읽고 자동으로 검증
 
 ---
 
-### [중기-2] 콘텐츠 자동화 파이프라인 완성
+### [단기-4] dry_run 모드 도입
 
-목표 플로우:
-```
-[Google Sheets: 콘텐츠 아이디어]
-         ↓ (Rube 연결 또는 API 직접)
-[content-writer-expert: 스크립트 생성]
-         ↓
-[visual-designer-expert: 이미지 생성]
-         ↓
-[공개 URL 호스팅 (imgbb)]
-         ↓
-[sns-manager-expert: Instagram 업로드 (Meta Graph API)]
-         ↓
-[execution_log.json: 성과 기록]
-         ↓
-[분석 대시보드 업데이트]
-```
-
----
-
-### [중기-3] 성과 기반 피드백 루프
-
-인스타그램 인사이트 API → 성과 데이터 수집
-→ 어떤 콘텐츠 유형이 잘 됐는지 자동 분석
-→ 다음 콘텐츠 계획에 반영
-
-```python
-# 주간 성과 자동 수집
-def collect_weekly_insights(since_timestamp, until_timestamp):
-    # Instagram Insights API 호출
-    # likes, comments, saves, reach, impressions
-    # → 가장 성과 좋은 포스트 유형, 시간대, 해시태그 분석
-    # → content_strategy.json 업데이트
-```
-
----
-
-### [중기-4] 시뮬레이션 모드 vs 실제 실행 모드 분리
-
-현재: 시뮬레이션과 실제 실행이 구분되지 않아서 execution_log가 부정확
-목표: 명확한 모드 분리
+외부 서비스 연동이 필요한 태스크를 테스트할 때 실제 호출 없이 흐름만 검증:
 
 ```json
 // session.json에 추가
 {
-  "execution_mode": "simulation" | "dry_run" | "production",
-  "simulation": {
-    "instagram_upload": false,    // 실제 업로드 안 함, 로그만 기록
-    "image_generation": true,     // 실제 이미지 생성
-    "web_search": true            // 실제 검색
+  "execution_mode": "dry_run" | "production",
+  "dry_run_behavior": {
+    "external_api_calls": "mock",
+    "file_generation": "real",
+    "web_search": "real"
   }
 }
 ```
 
-`simulation` 모드에서는 Instagram 업로드를 건너뛰고 로컬 파일로만 저장
-`production` 모드에서만 실제 Instagram API 호출
+`dry_run` 모드에서 외부 API 호출은 mock 응답을 반환하고 실제 요청은 발생하지 않음
+`production` 모드에서만 실제 외부 서비스 호출
 
 ---
 
-### [중기-5] Rube MCP 연결 체계화
+## 5. 중기 목표 (Mid-term — 1달 내)
 
-단기적으로 직접 API를 쓰더라도, 장기적으로는 Rube를 통한 500+ 앱 연동이 목표
+### [중기-1] HR이 생성한 agent 파일로 실제 병렬 독립 실행
 
-Rube 연결 우선순위:
-1. Gemini (이미지 생성 - 핵심)
-2. Instagram (업로드 - 핵심)
-3. Google Sheets (데이터 관리)
-4. Canva (디자인 - 선택)
+현재: 단일 expert-agent.md 파일이 모든 역할을 처리
+목표: HR이 고용한 에이전트들이 실제로 독립 컨텍스트에서 병렬 실행
 
-각 연결에 대해:
-- rube.app/marketplace에서 OAuth 완료
-- tool_inventory.json 재생성
-- hired_agents.json의 feasible_tools 업데이트
+Claude Code Agent tool로 각 expert-{id}.md를 독립 호출:
+```
+의존성 없는 태스크들 → 동시에 각자 다른 agent 파일로 병렬 실행
+  expert-001 (리서치 전문가) → task-001 수행
+  expert-002 (디자인 전문가) → task-004 수행
+  expert-003 (콘텐츠 작가)  → task-005 수행
+```
+
+**조건**: HR이 세션 1에서 추가한 agent 파일 생성 기능이 정상 동작해야 함
+
+---
+
+### [중기-2] QA 에이전트 고도화
+
+현재 QA: 공통 기준(요구사항/CEO지시/목표정합성/완성도)으로 채점
+목표: 태스크 유형별 전문 검증
+
+| 태스크 유형 | 추가 검증 기준 |
+|------------|--------------|
+| RESEARCH | hallucination 감지, 출처 검증, 날짜 신선도 |
+| ACTION (파일 생성) | 파일 크기, 포맷 정합성, 이미지 품질 |
+| ACTION (외부 서비스) | API 응답 코드, ID 유효성, 실제 서비스 반영 확인 |
+| DOCUMENT | 분량 적절성, 템플릿 준수, 내용 충실도 |
+
+---
+
+### [중기-3] 시뮬레이션 → 실제 실행 이관 체계
+
+전체 파이프라인을 dry_run으로 먼저 검증한 뒤 production으로 전환하는 프로세스:
+
+```
+1. CEO가 목표 입력 → 백로그/에이전트/태스크 생성
+2. dry_run 실행 → 모든 태스크의 흐름/에러 확인
+3. CEO가 dry_run 결과 검토 → production 승인
+4. production 실행 → 실제 외부 서비스 호출
+```
+
+---
+
+### [중기-4] Rube MCP 연결 모니터링
+
+현재 문제: 인벤토리가 스냅샷이어서 실제 연결 상태와 불일치
+목표: 실행 시마다 연결 상태를 자동 갱신
+
+```
+SKILL.md Phase 0에 추가:
+  - RUBE_MANAGE_CONNECTIONS 전체 앱 상태 확인
+  - tool_inventory.json과 불일치 시 자동 업데이트
+  - 연결 끊긴 앱이 있으면 CEO에게 알림
+```
+
+---
+
+### [중기-5] 성과 기반 피드백 루프 (도메인 종속 없이)
+
+외부 서비스 액션 후 결과를 추적하고 다음 실행에 반영:
+
+```
+외부 서비스 액션 → 결과 데이터 수집
+→ 어떤 콘텐츠/방식이 목표에 기여했는지 분석
+→ ceo_goal.json의 KPI 대비 진행률 업데이트
+→ 다음 Task Briefing에 성과 데이터 포함
+```
 
 ---
 
 ## 6. 구현 우선순위 요약
 
 ```
-즉시 (이번 주):
-  ✅ [즉시-1] Gemini API 직접 연결 스크립트
-  ✅ [즉시-2] Instagram 업로드 스크립트 (Meta Graph API)
-  ✅ [즉시-3] expert-agent.md ACTION 검증 기준 추가
-  ✅ [즉시-4] tool_inventory.json 재생성 (현재 실제 상태 반영)
+세션 1 완료 (2026-03-03):
+  ✅ ACTION 태스크 완료 기준 명시 (expert-agent.md)
+  ✅ Rube MCP 3단계 호출 패턴 (expert-agent.md)
+  ✅ QA 에이전트 추가 (qa-agent.md 신규)
+  ✅ QA 루프 워크플로우 반영 (SKILL.md)
+  ✅ HR 에이전트 agent 파일 생성 책임 추가 (hr-agent.md)
+  ✅ 시스템 일반화 (전체 에이전트 파일)
+  ✅ Phase 0 환경 체크 (SKILL.md)
 
 단기 (2주 내):
-  ☐ [단기-1] Expert 실행 단계 결정론적 분해
-  ☐ [단기-2] 이미지→업로드 통합 파이프라인
-  ☐ [단기-3] 에러 핸들링 + 폴백 체인
-  ☐ [단기-5] HR 에이전트 → 실제 agent 파일 생성
+  ☐ [단기-1] Expert 실행 결정론적 단계 분해
+  ☐ [단기-2] 에러 핸들링 + 폴백 체인
+  ☐ [단기-3] completion_criteria 필드 추가
+  ☐ [단기-4] dry_run 모드 도입
 
 중기 (1달 내):
-  ☐ [중기-1] Claude Agent Teams 활용
-  ☐ [중기-2] 콘텐츠 자동화 파이프라인 완성
-  ☐ [중기-4] 시뮬레이션 vs 실제 실행 모드 분리
+  ☐ [중기-1] HR agent 파일 → 실제 병렬 독립 실행
+  ☐ [중기-2] QA 에이전트 고도화 (유형별 전문 검증)
+  ☐ [중기-3] dry_run → production 이관 체계
+  ☐ [중기-4] Rube MCP 연결 모니터링 자동화
 ```
 
 ---
 
-## 7. 최종 목표 상태
+## 7. 최종 목표 상태 (일반화)
 
 ```
-사용자가 "인스타 업로드해줘"라고 하면:
-  1. content-writer-expert: 스크립트 + 캡션 생성 (30초)
-  2. visual-designer-expert: Gemini로 이미지 생성 + PIL 합성 (2분)
-  3. sns-manager-expert: imgbb 호스팅 + Instagram Graph API 2-step 업로드 (30초)
-  4. execution_log에 post_id, URL, 성과 추적 시작
+CEO가 어떤 목표를 입력하든:
 
-총 소요 시간: 약 3분
-실패율: < 5% (폴백 체인 적용)
-CEO 개입: Task Briefing에서만 (1회)
+  Phase 1 (계획):
+    ① CEO 목표 입력
+    ② RM → 프로젝트/태스크/의존성 그래프 생성
+    ③ Tool Agent → 실제 연결 상태 기반 인벤토리 생성
+    ④ HR → 역량 기반 에이전트 고용 + agent 파일 생성
+    ⑤ RM → 태스크 할당
+
+  Phase 2 (실행):
+    ⑥ Task Briefing → CEO 승인/수정
+    ⑦ Expert → 실제 도구 사용하여 결과물 생성
+    ⑧ QA → 품질 검증 (70점 기준 자동 판별)
+    ⑨ 미달 시: 구체적 피드백 → Expert 재시도 (최대 3회)
+    ⑩ CEO 개입 없이 자동 반복 → 목표 달성
+
+  목표:
+    - ACTION 태스크 성공률 > 95%
+    - QA 1회 통과율 > 70%
+    - CEO 개입: Task Briefing 1회 + 문제 발생 시만
+    - 실행 흐름: 완전 자동화 (인간 루프 최소화)
 ```
 
 ---
 
-## 부록: 필요한 API 키/인증 목록
+## 부록: 시스템 아키텍처 변경 이력
 
-| 서비스 | 획득 방법 | 저장 위치 | 비용 |
-|--------|---------|---------|------|
-| Gemini API Key | [aistudio.google.com](https://aistudio.google.com) | 환경변수 `GEMINI_API_KEY` | 무료 (60 req/min) |
-| Meta App (Instagram) | [developers.facebook.com](https://developers.facebook.com) | 환경변수 `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_USER_ID` | 무료 |
-| imgbb API | [api.imgbb.com](https://api.imgbb.com) | 환경변수 `IMGBB_API_KEY` | 무료 (32MB/day) |
-| Rube (선택) | [rube.app/marketplace](https://rube.app/marketplace) | `.mcp.json` + OAuth | 유료 또는 무료 플랜 |
+### v1.0 → v1.1 변경 요약
+
+| 구성요소 | v1.0 (이전) | v1.1 (현재) |
+|---------|------------|------------|
+| 에이전트 수 | 5개 (CEO, RM, Tool, HR, Expert) | **6개** (+ QA) |
+| ACTION 완료 기준 | 없음 (암묵적) | 명시적 (파일 존재 / post_id 기록 필수) |
+| 실패 처리 | 조용한 우회 → completed | TOOL_ERROR 인터럽트 의무화 |
+| 결과물 검증 | CEO 수동 확인 | QA 자동 채점 (0~100, 70점 기준) |
+| 재시도 | 수동 재실행 | 자동 반려+피드백+재시도 (최대 3회) |
+| HR 산출물 | hired_agents.json | hired_agents.json + `.claude/agents/` 파일 |
+| 도메인 종속성 | 인스타그램 특화 | **범용 (어떤 목표든 동작)** |
+| 도구 상태 확인 | 스냅샷 신뢰 | RUBE_MANAGE_CONNECTIONS 실시간 확인 |
+| 환경 체크 | 없음 | Phase 0 환경 검증 단계 추가 |
