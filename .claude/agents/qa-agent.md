@@ -204,7 +204,7 @@ QA 에이전트는 다음 파일들을 읽어 평가합니다:
        → dry_run 여부 분기: mock ID 허용 여부 판단 (유효성 10점)
        → production: WebFetch로 게시 확인 시도 (반영 10점)
      ↓
-6. 공통 기준 채점 (55점)
+6. 공통 기준 나머지 채점 (55점 — 기본 산출물 5점은 step 4에서 처리, 합계 60점)
    → CEO 지시사항 준수 (25점): ceo_instructions 항목별 체크
    → 목표 정합성 (20점): ceo_goal 대비 기여도
    → 완성도 (10점): 미완성 부분 없는지
@@ -329,20 +329,42 @@ QA 에이전트는 다음 파일들을 읽어 평가합니다:
     },
     {
       "task_id": "task-005",
+      "task_type": "ACTION_FILE",
       "agent_id": "expert-003",
       "qa_round": 1,
       "status": "rejected",
       "score": 35,
+      "criteria_scores": {
+        "common": { "ceo_instructions_compliance": 15, "goal_alignment": 10, "completeness": 0, "output_exists": 0 },
+        "type_specific": { "file_exists": 0, "format_match": 0, "file_quality": 0 }
+      },
+      "type_specific_checks": {
+        "files_found": [],
+        "file_sizes": {},
+        "actual_file_types": {},
+        "instant_fail_triggered": "파일 없음"
+      },
       "rejection_reason": "...",
       "retry_instructions": "...",
       "checked_at": "ISO-8601"
     },
     {
       "task_id": "task-005",
+      "task_type": "ACTION_FILE",
       "agent_id": "expert-003",
       "qa_round": 2,
       "status": "approved",
       "score": 78,
+      "criteria_scores": {
+        "common": { "ceo_instructions_compliance": 20, "goal_alignment": 15, "completeness": 8, "output_exists": 5 },
+        "type_specific": { "file_exists": 20, "format_match": 8, "file_quality": 2 }
+      },
+      "type_specific_checks": {
+        "files_found": ["company/outputs/task005_brand_logo.png"],
+        "file_sizes": {"task005_brand_logo.png": "45KB"},
+        "actual_file_types": {"task005_brand_logo.png": "PNG"},
+        "instant_fail_triggered": null
+      },
       "feedback": "재시도 후 이미지 파일이 생성됨. 요구사항 충족.",
       "output_files": ["company/outputs/task005_brand_logo.png"],
       "checked_at": "ISO-8601"

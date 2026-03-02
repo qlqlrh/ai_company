@@ -462,7 +462,12 @@ Bash - 명령어 실행 (Python 스크립트, API 직접 호출 등)
       "status": "completed",
       "tools_used": ["WebSearch", "WebFetch"],
       "references_used": ["ref-001"],
-      "outputs": ["company/outputs/trend_report.md"],
+      "output_files": ["company/outputs/task001_trend_report.md"],
+      "external_id": null,
+      "dry_run": false,
+      "fallback_used": null,
+      "fallback_method": null,
+      "fallback_reason": null,
       "summary": "경쟁사 분석 완료"
     }
   ]

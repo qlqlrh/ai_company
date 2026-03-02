@@ -98,6 +98,7 @@ RM은 **두 번** 호출됩니다:
     {
       "task_id": "task-010",
       "task_name": "태스크명",
+      "task_type": "RESEARCH|DOCUMENT|ACTION_FILE|ACTION_EXTERNAL",
       "agent_id": "expert-004",
       "project_id": "proj-004",
       "default_tools": ["Read", "Write", "WebSearch", "Bash"],
@@ -121,6 +122,7 @@ RM은 **두 번** 호출됩니다:
 ```
 
 **필드 설명:**
+- `task_type`: Expert/QA가 읽는 실행 유형. backlog의 `type`을 정제: RESEARCH, DOCUMENT는 그대로, ACTION은 파일 생성이면 `ACTION_FILE`, 외부 서비스 호출이면 `ACTION_EXTERNAL`로 구분. `completion_criteria.type`과 동일한 값
 - `default_tools`: Tool 인벤토리의 `task_tool_defaults` 기반 기본 Tool (CEO가 변경 가능)
 - `ceo_tools`: CEO가 Task Briefing에서 추가/변경한 Tool
 - `ceo_references`: CEO가 Task Briefing에서 첨부한 레퍼런스 + analyzed_content
