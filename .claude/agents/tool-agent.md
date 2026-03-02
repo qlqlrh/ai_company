@@ -87,32 +87,48 @@ model: sonnet
   "available_tools": {
     "builtin": [
       {"tool": "WebSearch", "status": "available"},
-      {"tool": "WebFetch", "status": "available"}
+      {"tool": "WebFetch", "status": "available"},
+      {"tool": "Read", "status": "available"},
+      {"tool": "Write", "status": "available"},
+      {"tool": "Edit", "status": "available"},
+      {"tool": "Bash", "status": "available"},
+      {"tool": "Glob", "status": "available"},
+      {"tool": "Grep", "status": "available"}
     ],
     "skills": [
-      {"tool": "/frontend-design", "status": "available", "description": "웹 UI 코드 생성"}
+      {"tool": "/frontend-design", "status": "available", "description": "웹 UI 코드 생성"},
+      {"tool": "/mcp-builder", "status": "available", "description": "MCP 서버 생성"}
     ],
     "mcp_rube": [
-      {"tool": "instagram", "status": "active", "account": "@cs_student_tips", "tools": ["INSTAGRAM_CREATE_MEDIA_CONTAINER", "INSTAGRAM_CREATE_POST"]},
-      {"tool": "gemini", "status": "active", "tools": ["GEMINI_GENERATE_IMAGE"]},
-      {"tool": "google_sheets", "status": "not_connected", "connect_url": "rube.app/marketplace"}
+      {
+        "tool": "[백로그에서 필요한 카테고리 기반으로 검색된 toolkit]",
+        "status": "active | not_connected",
+        "note": "[연결 안 됐으면 rube.app/marketplace에서 연결 안내]"
+      }
     ],
     "external_api": [
-      {"tool": "imgflip_api", "status": "available", "confidence": "HIGH", "note": "무료 밈 템플릿 API", "source": "web_search"}
+      {
+        "tool": "[웹 검색으로 발견된 외부 API]",
+        "status": "available",
+        "confidence": "HIGH | MEDIUM | LOW",
+        "note": "[무료/유료, 인증 방법, 제한]",
+        "source": "web_search"
+      }
     ]
   },
   "task_tool_defaults": {
     "task-001": {
-      "recommended_tools": ["WebSearch", "WebFetch", "INSTAGRAM_GET_USER_INFO"],
-      "combination_note": "경쟁사 계정 분석 후 인사이트 정리"
-    },
-    "task-010": {
-      "recommended_tools": ["Bash", "GEMINI_GENERATE_IMAGE", "imgflip_api"],
-      "combination_note": "Gemini 커스텀 이미지 + Imgflip 클래식 밈 + PIL 후처리"
+      "recommended_tools": ["[백로그 suggested_tool_categories 기반 추천]"],
+      "combination_note": "[왜 이 조합인지]"
     }
   }
 }
 ```
+
+**Rube 검색 시 쿼리 방법:**
+- 백로그의 `suggested_tool_categories`를 기반으로 RUBE_SEARCH_TOOLS를 호출합니다.
+- 예: `suggested_tool_categories: ["image_generation", "social_media"]` → "image generation AI tool", "social media post publishing" 등으로 검색
+- 검색 결과에서 나온 toolkit 이름으로 RUBE_MANAGE_CONNECTIONS를 호출하여 연결 상태를 확인합니다.
 
 ### 신뢰도 레벨
 
@@ -174,7 +190,7 @@ CEO 레퍼런스 첨부 (Task Briefing ⑧에서)
 
 | Intent | 분석 방법 | 추천 Tool |
 |--------|----------|-----------|
-| style | 이미지 분석 (디자인 요소) | /frontend-design, figma |
+| style | 이미지 분석 (색상, 레이아웃, 분위기) | /frontend-design, 이미지 생성 Tool |
 
 #### 파일 레퍼런스
 

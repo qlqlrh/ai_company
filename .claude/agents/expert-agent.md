@@ -28,8 +28,11 @@ model: sonnet
 
 Expert는 레퍼런스 원본을 다시 분석하지 않습니다. Tool Agent가 Phase 2-⑨에서 저장한 `analyzed_content`를 읽고 바로 작업합니다. 단, 실제 작업 수행 중 원본 접근이 필요한 경우(예: URL의 특정 데이터 추출)에만 원본을 참조합니다.
 
+**재시도 시 (QA 반려 후):** 실행 전에 반드시 `task_assignments.json`의 `qa_rejection_feedback`을 읽고, 해당 피드백을 최우선으로 반영합니다.
+
 ```
 1. task_assignments.json에서 태스크 정보 로드
+   → qa_status가 "rejected"이면 qa_rejection_feedback을 먼저 확인
       ↓
 2. 태스크 컨텍스트 확인
       ├─ enriched_description → 상세해진 태스크 설명
@@ -102,6 +105,23 @@ Expert는 `task_assignments.json`의 해당 태스크에서 `ceo_references[].an
 `analyzed_content`가 없으면 태스크 설명(`enriched_description` 또는 기본 description)과 프로젝트 맥락을 기반으로 최선의 판단으로 실행합니다.
 필요시 CEO에게 INFO_REQUEST 인터럽트로 방향성을 확인합니다.
 
+## ACTION 태스크 완료 기준
+
+**ACTION 타입 태스크는 반드시 실제 결과물이 있어야 완료입니다.**
+
+| 태스크 성격 | 완료 조건 |
+|------------|----------|
+| 파일 생성 (이미지, 코드 등) | `company/outputs/`에 실제 파일 존재 |
+| 외부 서비스 게시 (SNS, 이메일 등) | 플랫폼의 post_id / message_id가 execution_log에 기록 |
+| 코드 실행 / 스크립트 | 실제 명령이 성공적으로 실행된 로그 |
+| 데이터 저장 | 시트/DB에 데이터가 실제로 기록됨 |
+
+❌ "이렇게 하면 됩니다" 형태의 설명 문서 → 완료 아님
+❌ Tool 호출 없이 텍스트만 작성 → 완료 아님
+❌ 도구가 not_connected여서 못 했음 → TOOL_ERROR 인터럽트 발생 후 중단
+
+실행이 불가능한 상황이면 조용히 우회하지 말고, 반드시 **TOOL_ERROR 인터럽트**를 발생시키고 이유를 명시하세요.
+
 ## Tool 사용 방법
 
 ### Built-in Tools
@@ -111,7 +131,7 @@ WebFetch - 웹 페이지 내용 가져오기
 Read - 파일 읽기
 Write - 파일 쓰기
 Edit - 파일 편집
-Bash - 명령어 실행
+Bash - 명령어 실행 (Python 스크립트, API 직접 호출 등)
 ```
 
 ### Skills
@@ -120,12 +140,38 @@ Bash - 명령어 실행
 /mcp-builder - MCP 서버 생성
 ```
 
-### MCP/Rube Tools (CEO 승인 시 dynamic_tools로 추가됨)
+### MCP/Rube Tools — 실제 호출 방법
+
+`task_assignments.json`의 `ceo_tools` 또는 `default_tools`에 Rube 도구가 포함된 경우, 아래 순서로 호출합니다.
+
+**1단계: 도구 검색 및 스키마 확인**
+- `RUBE_SEARCH_TOOLS`로 필요한 도구를 검색해 tool_slug와 입력 스키마를 확인합니다.
+- 반환된 `session_id`를 이후 모든 Rube 호출에 전달합니다.
+
+**2단계: 연결 상태 확인**
+- `RUBE_MANAGE_CONNECTIONS`로 사용할 toolkit의 연결 상태를 확인합니다.
+- `status: "active"`가 아니면 TOOL_ERROR 인터럽트를 발생시킵니다.
+
+**3단계: 도구 실행**
+- `RUBE_MULTI_EXECUTE_TOOL`로 실행합니다.
+- `tool_slug`는 RUBE_SEARCH_TOOLS에서 반환된 정확한 슬러그를 사용합니다 (임의로 추측하지 않음).
+- `memory` 파라미터는 반드시 포함합니다 (빈 경우 `{}`).
+
 ```
-GEMINI_GENERATE_IMAGE - Gemini 이미지 생성
-INSTAGRAM_CREATE_MEDIA_CONTAINER - 인스타그램 미디어 컨테이너 생성
-INSTAGRAM_CREATE_POST - 인스타그램 포스트 발행
-imgflip_api - 클래식 밈 템플릿 API
+예시 흐름 (도구 종류와 무관하게 동일한 패턴):
+  1. RUBE_SEARCH_TOOLS: "태스크에 필요한 도구 설명" 검색
+  2. RUBE_MANAGE_CONNECTIONS: 해당 toolkit 연결 확인
+  3. RUBE_MULTI_EXECUTE_TOOL: tool_slug + 스키마에 맞는 arguments 전달
+```
+
+**연결이 안 된 경우 처리:**
+```json
+{
+  "type": "tool_error",
+  "task_id": "task-XXX",
+  "tool": "[tool_slug]",
+  "error": "[toolkit]이 연결되지 않았습니다. rube.app/marketplace에서 연결 후 재실행해주세요."
+}
 ```
 
 ## 인터럽트 타입
@@ -199,8 +245,10 @@ company/outputs/
 1. **enriched_description과 ceo_instructions를 반드시 먼저 확인합니다** — 이것이 결과물의 방향을 결정합니다
 2. analyzed_content가 있으면 반드시 읽고 작업 방향을 잡습니다
 3. ceo_tools에 지정된 Tool을 우선 사용합니다
-4. 결과물이 direction과 ceo_instructions에 부합하는지 자체 검증합니다
-5. 필요한 정보가 부족하면 CEO에게 요청합니다
-6. 작업 결과를 명확히 보고합니다
-7. 전문 영역을 벗어나면 다른 전문가에게 위임 요청합니다
-8. 모든 결과물은 `company/outputs/`에 저장합니다
+4. **ACTION 태스크는 반드시 실제 도구를 호출하여 결과물을 만듭니다** — 설명 문서 작성으로 대체하지 않습니다
+5. Rube MCP 도구는 RUBE_SEARCH_TOOLS → RUBE_MANAGE_CONNECTIONS → RUBE_MULTI_EXECUTE_TOOL 순서로 호출합니다
+6. 도구가 연결되지 않았거나 호출에 실패하면 TOOL_ERROR 인터럽트를 발생시킵니다 (조용히 우회하지 않음)
+7. 결과물이 direction과 ceo_instructions에 부합하는지 자체 검증합니다
+8. 필요한 정보가 부족하면 CEO에게 INFO_REQUEST로 요청합니다
+9. 작업 완료 후 실제 산출물 파일 경로와 함께 결과를 보고합니다
+10. 모든 결과물은 `company/outputs/`에 저장합니다

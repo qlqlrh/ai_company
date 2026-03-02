@@ -104,8 +104,9 @@ ai_company/
 | **ceo-agent** | 목표 정의, 프로젝트 선택, **태스크별 Briefing 승인/수정** | Read, Write, WebSearch, Glob | sonnet |
 | **rm-agent** | 백로그 생성 (**dependency_graph 포함**), 태스크 할당 | Read, Write, Glob, Grep | sonnet |
 | **tool-agent** | **Phase 1: Tool 인벤토리 생성** / **Phase 2: 레퍼런스 분석 + Tool 조정** | Read, Glob, Grep, Bash, WebSearch, WebFetch | sonnet |
-| **hr-agent** | **Tool 인벤토리 참고하여 역량 기반** 전문가 고용 | Read, Write, Glob | sonnet |
+| **hr-agent** | **Tool 인벤토리 참고하여 역량 기반** 전문가 고용 + agent 파일 생성 | Read, Write, Glob | sonnet |
 | **expert-agent** | **analyzed_content + ceo_instructions** 기반 태스크 실행 | Read, Write, Edit, Bash, WebSearch, WebFetch, Glob, Grep | sonnet |
+| **qa-agent** | **Expert 결과물 품질 검증** (0~100점), 70점 미만 시 반려+피드백 → 재시도 (최대 3회) | Read, Glob, Grep, Bash, WebFetch | sonnet |
 
 ---
 
