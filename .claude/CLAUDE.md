@@ -438,11 +438,26 @@ Rube 검증:
 {
   "session_id": "ses_YYYYMMDD_NNN",
   "phase": "goal_input | backlog_creation | tool_inventory | hiring | assignment | ready_to_execute | project_selection | task_briefing | ceo_review | executing | project_completed | all_completed",
+  "execution_mode": "production | dry_run",
+  "dry_run_config": {
+    "mock_external_apis": true,
+    "generate_files": true,
+    "web_search": true
+  },
   "current_project": "proj-001",
   "current_task": "task-001",
   "created_at": "ISO-8601"
 }
 ```
+
+**execution_mode 값:**
+- `production`: 실제 외부 서비스 연동, 실제 API 호출
+- `dry_run`: 외부 API를 mock 처리, 전체 흐름 검증용 (기본값 권장)
+
+**dry_run_config:**
+- `mock_external_apis`: Rube/외부 API 호출을 mock 응답으로 대체 (기본: true)
+- `generate_files`: 로컬 파일은 실제로 생성 (기본: true)
+- `web_search`: 웹 검색은 실제로 수행 (기본: true)
 
 ### backlog.json (dependency_graph 포함)
 ```json

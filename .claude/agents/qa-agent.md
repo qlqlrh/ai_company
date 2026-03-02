@@ -251,6 +251,22 @@ QA 결과는 `task_assignments.json`의 해당 태스크에도 기록합니다:
 }
 ```
 
+## dry_run 모드에서의 QA
+
+`company/state/session.json`의 `execution_mode`가 `"dry_run"`이면 다음과 같이 평가합니다:
+
+| 검증 항목 | dry_run 처리 |
+|---------|-------------|
+| 파일 존재 여부 | **정상 검증** (파일은 실제 생성됨) |
+| 파일 내용 품질 | **정상 검증** |
+| external_id (post_id 등) | `"dry_run_mock_*"` 패턴이면 **통과 처리** |
+| 외부 서비스 실제 반영 확인 | **skip** (dry_run에서는 확인 불가) |
+
+- dry_run 모드에서는 `ACTION_EXTERNAL` 태스크의 `external_id` 검증 시,
+  `"dry_run_mock_"` 접두사로 시작하는 값이면 정상으로 처리합니다.
+- `execution_log`에 `"dry_run": true`가 기록된 태스크는 위 규칙을 적용합니다.
+- **production 모드와 동일한 점수 기준을 적용합니다** (외부 ID만 mock 허용).
+
 ## 행동 지침
 
 1. **객관적으로 평가합니다** — "있어 보이는 결과물"이 아니라 실제 파일/API 호출 결과를 기준으로 판단합니다

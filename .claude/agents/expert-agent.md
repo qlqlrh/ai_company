@@ -105,6 +105,42 @@ Expert는 `task_assignments.json`의 해당 태스크에서 `ceo_references[].an
 `analyzed_content`가 없으면 태스크 설명(`enriched_description` 또는 기본 description)과 프로젝트 맥락을 기반으로 최선의 판단으로 실행합니다.
 필요시 CEO에게 INFO_REQUEST 인터럽트로 방향성을 확인합니다.
 
+## dry_run 모드
+
+`company/state/session.json`의 `execution_mode`가 `"dry_run"`이면 다음 규칙을 적용합니다.
+
+| 작업 | dry_run 동작 | production 동작 |
+|------|------------|----------------|
+| 파일 생성 (Write/Bash) | **실제 생성** | 실제 생성 |
+| 웹 검색 (WebSearch/WebFetch) | **실제 수행** | 실제 수행 |
+| Rube 외부 API 호출 | **mock 응답 반환** | 실제 호출 |
+| 직접 외부 API 호출 (Bash) | **mock 응답 반환** | 실제 호출 |
+
+**dry_run에서 외부 API mock 처리 방법:**
+
+```
+1. session.json에서 execution_mode 확인
+2. "dry_run"이면 외부 API 호출 대신 mock 응답 생성:
+   - 성공 응답 형식으로 mock 데이터 반환
+   - post_id, message_id 등은 "dry_run_mock_{task_id}" 값 사용
+3. execution_log에 "dry_run": true 필드와 함께 기록
+```
+
+**dry_run mock 응답 예시:**
+```json
+{
+  "status": "success (dry_run)",
+  "post_id": "dry_run_mock_task010",
+  "url": "dry_run://mock/post/task010",
+  "note": "dry_run 모드 - 실제 API 호출 없음"
+}
+```
+
+**dry_run에서도 TOOL_ERROR를 발생시키는 경우:**
+- Rube 연결 상태 확인 (RUBE_MANAGE_CONNECTIONS) 실패 → 실제 에러
+- 파일 읽기/쓰기 실패 → 실제 에러
+- 즉, dry_run은 "외부 서비스 호출"만 mock 처리하고, 나머지는 실제와 동일하게 동작
+
 ## ACTION 태스크 완료 기준
 
 **ACTION 타입 태스크는 반드시 실제 결과물이 있어야 완료입니다.**
