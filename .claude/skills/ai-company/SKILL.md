@@ -319,64 +319,107 @@ CEO가 레퍼런스를 첨부한 경우에만 **tool-agent 호출**.
 
 ### Step 10: 태스크 실행 + QA 검증 (자동 병렬)
 
-**expert-agent 호출 → qa-agent 검증** 사이클을 dependency_graph 기반으로 자동 병렬 실행합니다.
+**전용 expert-{id} 에이전트 호출 → qa-agent 검증** 사이클을 dependency_graph 기반으로 자동 병렬 실행합니다.
 
-**단일 태스크 실행 사이클:**
+#### 10-1. 실행 준비: 에이전트 파일 확인
+
+실행 전 `task_assignments.json`에서 태스크별 `agent_id`를 조회하고, 해당 에이전트 파일이 존재하는지 확인합니다.
 
 ```
-[1] expert-agent 호출 (태스크 실행)
-      ↓
-[2] qa-agent 호출 (결과물 검증)
+task_assignments.json 읽기
+  → task-010.agent_id = "expert-004"
+  → .claude/agents/expert-004.md 존재 확인
+    (agent_id가 이미 "expert-004" 형식이므로 파일명은 expert-004.md)
+
+존재하지 않는 경우:
+  → hr-agent를 재호출하여 해당 에이전트 파일 생성 후 재시도
+```
+
+#### 10-2. 병렬 실행 그룹 추출
+
+dependency_graph에서 현재 실행 가능한 태스크 그룹을 추출합니다.
+
+```
+dependency_graph 분석:
+  "task-001": []        → 즉시 실행 가능 (독립)
+  "task-004": []        → 즉시 실행 가능 (독립)
+  "task-002": ["task-001"] → task-001 완료 후 실행 가능
+  "task-005": ["task-004"] → task-004 완료 후 실행 가능
+
+현재 실행 가능 그룹:
+  Round 1: [task-001, task-004]  ← 동시 실행
+  Round 2: [task-002, task-005]  ← 각 선행 태스크 완료 후
+```
+
+#### 10-3. 병렬 실행 (핵심)
+
+**독립 태스크가 여러 개면 단일 응답에서 여러 Agent tool call을 동시에 호출합니다.**
+각 에이전트는 독립 컨텍스트에서 동시 실행됩니다.
+
+```
+[단일 응답에서 동시 호출 — 병렬 실행]
+
+  Agent(subagent_type: "expert-001")  ←── task-001의 agent_id
+    "company/state/task_assignments.json의 task-001 태스크를 실행하세요"
+
+  Agent(subagent_type: "expert-002")  ←── task-004의 agent_id (동시)
+    "company/state/task_assignments.json의 task-004 태스크를 실행하세요"
+
+  → 두 에이전트가 독립 컨텍스트에서 동시 실행됨
+  → .claude/agents/expert-001.md, expert-002.md를 각각 로드
+```
+
+**호출 규칙:**
+- `agent_id`를 `task_assignments[task_id].agent_id`에서 조회 (예: "expert-001")
+- 에이전트 파일: `.claude/agents/{agent_id}.md` (HR이 생성한 파일)
+- 호출: `Agent(subagent_type: "{agent_id}", prompt: "task_assignments.json의 {task_id} 태스크를 실행하세요")`
+- 독립 태스크는 **반드시 단일 메시지에서 여러 Agent 호출** (순차 호출 금지)
+
+#### 10-4. 단일 태스크 실행-QA 사이클
+
+각 에이전트 실행 완료 후 qa-agent를 즉시 호출합니다:
+
+```
+[1] expert-{agent_id} 호출 (태스크 실행)
+      ↓ 완료
+[2] qa-agent 호출: "task-XXX QA 검증해줘"
       ↓ score ≥ 70
-[3] ✅ 승인 → task status = "qa_approved" → 다음 태스크
-      ↓ score < 70 (최대 3회까지)
-[4] ❌ 반려 → qa_rejection_feedback을 expert에게 전달 → [1]로 재시도
-      ↓ 3회 초과
-[5] 🚨 CEO 인터럽트 (qa_escalation)
+[3] ✅ 승인 → task status = "qa_approved" → 다음 의존 태스크 unlock
+      ↓ score < 70 (qa_round < 3)
+[4] ❌ 반려 → qa_rejection_feedback과 함께 expert-{agent_id} 재호출
+      ↓ qa_round ≥ 3
+[5] 🚨 CEO 인터럽트 (qa_escalation) → 대기
 ```
-
-**병렬 실행 시:**
-- 독립 태스크는 동시에 실행 (각자 expert → QA 사이클 독립 진행)
-- 의존 태스크는 선행 태스크가 **QA 승인까지 완료**된 후 시작
 
 **오케스트레이터의 역할:**
-1. dependency_graph에서 실행 가능한 태스크 그룹 추출
-2. 각 태스크에 대해 expert-agent 호출
-3. expert 완료 → qa-agent 호출하여 결과 검증
-4. QA 반려 시 → retry_instructions와 함께 expert-agent 재호출
-5. QA 승인 시 → 다음 의존 태스크 unlock
-
-**오케스트레이터는 QA가 통과된 태스크만 최종 완료로 처리합니다.**
+1. `task_assignments.json`에서 `agent_id` 조회 → 해당 expert-{id} 에이전트 특정
+2. 독립 태스크: **단일 메시지에서 여러 Agent tool call 동시 실행**
+3. 각 expert 완료 → 즉시 qa-agent 호출하여 결과 검증
+4. QA 반려 시 → `retry_instructions`와 함께 동일 expert-{id} 재호출
+5. QA 승인 시 → dependency_graph에서 해당 태스크를 "완료"로 표시 → 다음 가능한 태스크 unlock
+6. QA가 통과된 태스크만 최종 완료로 처리
 
 ```
 ══════════════════════════════════════════════════════════════
    실행 중: 프로젝트 N - [프로젝트명]
 ══════════════════════════════════════════════════════════════
 
-의존성 분석:
-  task-XXX: 선행 완료 → 바로 실행
-  task-YYY: task-XXX 의존 → 대기
+의존성 분석 결과:
+  Round 1 (병렬): task-001 (agent_id: expert-001), task-004 (agent_id: expert-002)
+  Round 2 (순차): task-002 (task-001 완료 후), task-005 (task-004 완료 후)
 
-[실행] Task XXX: [태스크명]
-   담당: [역할명]
-   Tool: [승인된 Tool 목록]
-   레퍼런스: analyzed_content 참조 (있는 경우)
-   지시: [ceo_instructions]
+[Round 1 - 병렬 실행]
+  → Agent("expert-001", "task-001 실행") ─┐ 단일 응답에서 동시 호출!
+  → Agent("expert-002", "task-004 실행") ─┘
 
-   결과: company/outputs/[산출물 파일]
-   완료 ✅
+  ✅ task-001 완료 → qa-agent 검증 → score 82 → 승인
+  ✅ task-004 완료 → qa-agent 검증 → score 75 → 승인
 
-[실행] Task YYY: [태스크명] (task-XXX 완료 → 시작)
-   ...
-```
-
-독립 태스크가 여러 개인 경우 자동 병렬:
-```
-[병렬 실행]
-  task-004 (독립) ──┐
-  task-006 (독립) ──┤ 동시 실행!
-                    ↓
-  task-005 (task-004 의존) → 순차
+[Round 2 - unlock 후 병렬]
+  task-001 완료 → task-002 unlock
+  task-004 완료 → task-005 unlock
+  → Agent("expert-001", "task-002 실행") ─┐ 단일 응답에서 동시 호출!
+  → Agent("expert-002", "task-005 실행") ─┘
 ```
 
 저장: `company/state/execution_log.json`
