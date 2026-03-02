@@ -38,6 +38,7 @@ Expert는 레퍼런스 원본을 다시 분석하지 않습니다. Tool Agent가
       ├─ enriched_description → 상세해진 태스크 설명
       ├─ direction → 전체 작업 방향성
       ├─ ceo_instructions → CEO 지시사항 (반드시 준수)
+      ├─ completion_criteria → 완료 검증 기준 (있으면 이것 기준으로 결과물 목표 설정)
       ├─ ceo_references → 레퍼런스 목록
       │   └─ analyzed_content 확인:
       │       ├─ style_elements → 적용할 스타일
@@ -55,22 +56,106 @@ Expert는 레퍼런스 원본을 다시 분석하지 않습니다. Tool Agent가
       ├─ 미완료 → 대기
       └─ 완료 → 계속
       ↓
-5. analyzed_content + ceo_instructions 기반 실행 계획 수립
-      ↓
-6. 필수 입력 확인
+5. 필수 입력 확인
       ├─ 부족 → INFO_REQUEST 인터럽트
       └─ 충족 → 계속
       ↓
-7. 태스크 실행
+6. 태스크 타입별 결정론적 실행 (아래 섹션 참조)
       ↓
-8. 승인 필요 시 (APPROVAL 타입)
+7. 승인 필요 시 (APPROVAL 타입)
       └─ APPROVAL_REQUEST 인터럽트
       ↓
-9. 결과물이 direction/style_elements/ceo_instructions와 부합하는지 자체 검증
-      ├─ 부합 → 계속
-      └─ 미흡 → 보완 작업
+8. completion_criteria 기준 자체 검증
+      ├─ 통과 → 계속
+      └─ 미흡 → 보완 작업 (최대 1회)
       ↓
-10. 결과 저장
+9. execution_log.json에 결과 기록
+```
+
+## 태스크 타입별 결정론적 실행
+
+**각 단계가 실패하면 즉시 TOOL_ERROR를 발생시키고 다음 단계로 진행하지 않습니다.**
+
+### RESEARCH 태스크
+
+```
+Step 1. enriched_description 기반 검색 쿼리 설계 (2~5개)
+         ↓ 실패(쿼리 설계 불가) → INFO_REQUEST
+Step 2. WebSearch / WebFetch 실행
+         → 각 쿼리별 결과 수집
+         ↓ 실패(결과 없음) → 쿼리 변경 후 1회 재시도 → 그래도 없으면 TOOL_ERROR
+Step 3. 수집 결과 분석 및 정리
+         → ceo_instructions의 분석 항목 모두 커버 확인
+         → 출처(URL + 날짜) 명시
+Step 4. 파일 저장
+         → company/outputs/{task_id}_{name}.md 로 저장
+         ↓ 저장 실패 → TOOL_ERROR
+Step 5. 저장 확인
+         → Read로 파일 열어 내용 비어있지 않은지 확인
+         ↓ 비어있음 → TOOL_ERROR
+```
+
+### DOCUMENT 태스크
+
+```
+Step 1. 문서 구조 설계
+         → ceo_instructions + enriched_description 기반 목차/섹션 구성
+         → completion_criteria.content_requirements 항목을 모두 포함
+Step 2. 섹션별 내용 작성
+         → 각 섹션 실제 내용 작성 (가이드라인·템플릿 형식 금지)
+         → ceo_references의 analyzed_content 적극 반영
+Step 3. 형식 검토
+         → 요청된 형식(마크다운, 표, 목록 등) 준수 여부 확인
+         → 분량이 enriched_description의 요구사항에 부합하는지 확인
+Step 4. 파일 저장
+         → company/outputs/{task_id}_{name}.md 로 저장
+         ↓ 저장 실패 → TOOL_ERROR
+Step 5. 저장 확인
+         → Read로 파일 열어 내용 비어있지 않은지, 섹션이 누락되지 않았는지 확인
+         ↓ 이상 → 보완 후 재저장
+```
+
+### ACTION_FILE 태스크 (파일 생성)
+
+```
+Step 1. session.json에서 execution_mode 확인
+         → "dry_run" / "production" 구분
+Step 2. 필요 도구 연결 상태 확인
+         → RUBE_MANAGE_CONNECTIONS 실시간 호출
+         ↓ not_active → TOOL_ERROR (연결 URL 안내 포함)
+Step 3. 도구 호출로 결과물 생성
+         → ceo_tools 또는 default_tools에 지정된 도구 사용
+         → dry_run이면 mock 처리 (단, 파일 생성 자체는 실제로)
+         ↓ 호출 실패 → TOOL_ERROR (에러 메시지 포함)
+Step 4. 결과물 저장
+         → company/outputs/{task_id}_{name}.{ext} 로 저장
+         ↓ 저장 실패 → TOOL_ERROR
+Step 5. 저장 확인
+         → Bash: ls -lh company/outputs/{task_id}_* 실행
+         → 파일 크기 0 또는 파일 없음 → TOOL_ERROR
+Step 6. execution_log 기록
+         → output_files, tools_used, status 기록
+```
+
+### ACTION_EXTERNAL 태스크 (외부 서비스 호출)
+
+```
+Step 1. session.json에서 execution_mode 확인
+         → dry_run이면 Step 3을 mock 처리
+Step 2. 필요 도구 연결 상태 확인
+         → RUBE_MANAGE_CONNECTIONS 실시간 호출
+         ↓ not_active → TOOL_ERROR (rube.app/marketplace 안내)
+Step 3. 외부 서비스 API 호출
+         → dry_run: mock 응답 생성 {"post_id": "dry_run_mock_{task_id}", ...}
+         → production: RUBE_MULTI_EXECUTE_TOOL로 실제 호출
+         ↓ 호출 실패 → TOOL_ERROR (HTTP 상태 코드 포함)
+Step 4. 응답에서 식별자(ID) 추출
+         → post_id / message_id / item_id 등 completion_criteria.expected_outputs[].field 값
+         ↓ ID 없음 → TOOL_ERROR ("API 호출 성공했으나 ID 반환 없음")
+Step 5. execution_log 기록
+         → external_id, tools_used, status, dry_run 여부 기록
+Step 6. (dry_run 아닌 경우) 외부 서비스에서 실제 반영 확인
+         → API로 게시물 조회하여 존재 여부 확인 (가능한 경우)
 ```
 
 ## analyzed_content 활용 방법
