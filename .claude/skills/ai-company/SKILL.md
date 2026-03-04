@@ -231,11 +231,15 @@ Subagent(tool-agent)는 MCP 툴에 접근할 수 없으므로, Step 3는 다음 
 ══════════════════════════════════════════════════════════════
 
 Built-in (8): WebSearch, WebFetch, Read, Write, Edit, Bash, Glob, Grep
-Skills (2): /frontend-design, /mcp-builder
+Skills: /frontend-design, /mcp-builder, /pollinations-ai, /image-generation-mcp
+        + .claude/skills/ 스캔으로 추가 스킬 자동 발견
 MCP/Rube (오케스트레이터 사전 확인 결과):
   - gemini: ACTIVE
   - instagram: ACTIVE (@계정명)
   - slack: not_connected
+Vibe Index 검색 (Built-in/Rube로 커버 안 되는 카테고리):
+  API: https://vibeindex.ai/api/resources?ref=skill-vibeindex&search={키워드}&pageSize=10
+  발견된 추가 툴: [검색 결과 기반]
 
 태스크별 기본 Tool 추천:
   [각 태스크 ID]: [백로그 suggested_tool_categories 기반 추천 도구]
@@ -578,6 +582,8 @@ Phase 2 (프로젝트 단위 반복):
 ### Skills (설치된 경우)
 - `/frontend-design` - 웹 UI 코드 생성
 - `/mcp-builder` - MCP 서버 생성
+- `/pollinations-ai` - 무료 이미지 생성 (API 키 불필요, flux/turbo/stable-diffusion)
+- `/image-generation-mcp` - Gemini MCP 기반 고품질 이미지 생성 (gemini-cli 필요)
 - 기타 `.claude/skills/` 디렉토리의 스킬들
 
 ### MCP (설정된 경우)

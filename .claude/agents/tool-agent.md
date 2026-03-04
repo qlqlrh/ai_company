@@ -135,7 +135,8 @@ tool_inventory.json 직접 수정:
    WebSearch, WebFetch, Read, Write, Edit, Bash, Glob, Grep
       ↓
 3. Local Skills 스캔
-   .claude/skills/ → /frontend-design, /mcp-builder 등
+   .claude/skills/ → /frontend-design, /mcp-builder, /pollinations-ai, /image-generation-mcp 등
+   (npx skills add 로 설치된 스킬은 .agents/skills/ 에 저장되고 .claude/skills/ 에 symlink로 자동 연결됨)
       ↓
 4. MCP 서버 확인 + Rube 마켓플레이스 검색
    ├─ .mcp.json 확인 → 연결된 MCP 서버 목록
@@ -151,8 +152,11 @@ tool_inventory.json 직접 수정:
    ├─ 발견된 API의 무료/유료, 인증 방법, 제한사항 조사
    └─ 신뢰도 레벨 부여 (HIGH/MEDIUM/LOW)
       ↓
-6. 외부 마켓플레이스 검색 (필요시)
-   ├─ MCP.so (17,000+ MCP 서버)
+6. 외부 마켓플레이스 검색 (Built-in/Rube로 커버 안 되는 카테고리 발견 시)
+   ├─ Vibe Index API (우선 사용):
+   │   WebFetch https://vibeindex.ai/api/resources?ref=skill-vibeindex&search={카테고리키워드}&pageSize=10
+   │   → skill/mcp/plugin 타입 필터링 → 설치 명령어 추출
+   ├─ MCP.so (https://mcp.so/) — 17,000+ MCP 서버
    ├─ anthropics/skills (GitHub)
    └─ 기타 커뮤니티 소스
       ↓
@@ -168,7 +172,7 @@ tool_inventory.json 직접 수정:
   "verification_sources": [
     "builtin_check", "local_skills_scan", "mcp_json_check",
     "rube_search_tools", "rube_manage_connections",
-    "web_search", "marketplace_search"
+    "web_search", "vibeindex_search", "marketplace_search"
   ],
   "available_tools": {
     "builtin": [
@@ -183,7 +187,9 @@ tool_inventory.json 직접 수정:
     ],
     "skills": [
       {"tool": "/frontend-design", "status": "available", "description": "웹 UI 코드 생성"},
-      {"tool": "/mcp-builder", "status": "available", "description": "MCP 서버 생성"}
+      {"tool": "/mcp-builder", "status": "available", "description": "MCP 서버 생성"},
+      {"tool": "/pollinations-ai", "status": "available", "description": "무료 이미지 생성 (API 키 불필요)", "path": ".claude/skills/pollinations-ai/SKILL.md"},
+      {"tool": "/image-generation-mcp", "status": "available_requires_mcp", "description": "Gemini MCP 기반 고품질 이미지 생성 (gemini-cli 필요)", "path": ".claude/skills/image-generation-mcp/SKILL.md"}
     ],
     "mcp_rube": [
       {
@@ -276,7 +282,7 @@ CEO 레퍼런스 첨부 (Task Briefing ⑧에서)
 
 | Intent | 분석 방법 | 추천 Tool |
 |--------|----------|-----------|
-| style | 이미지 분석 (색상, 레이아웃, 분위기) | /frontend-design, 이미지 생성 Tool |
+| style | 이미지 분석 (색상, 레이아웃, 분위기) | /frontend-design, /pollinations-ai (즉시사용), /image-generation-mcp (gemini-cli 연결 시 고품질), gemini (Rube) |
 
 #### 파일 레퍼런스
 
@@ -316,9 +322,30 @@ CEO가 승인만 하면 기본 Tool로 바로 실행.
 
 로컬에 없는 Tool은 외부에서 검색합니다:
 
-1. **MCP.so** (https://mcp.so/) - 17,000+ MCP 서버
-2. **anthropics/skills** (https://github.com/anthropics/skills)
-3. **claude-market** (https://github.com/claude-market/marketplace)
+1. **Vibe Index** (https://www.vibeindex.ai/) - Claude Code 전용 AI 툴 디렉토리 (103,000+ 툴, 매시간 업데이트)
+   - **MCPs**: Claude Code에 연결되는 외부 서비스 서버 (DB, Figma, API 등)
+   - **Skills**: Claude에게 프레임워크 전문 지식을 부여하는 지식 파일
+   - **Plugins**: 온디맨드 슬래시 명령어 (`/commit`, `/review-pr` 등)
+   - **Marketplaces**: 신뢰할 수 있는 소스의 큐레이션 컬렉션
+   - **검색 방법 (API 직접 호출)**:
+     ```
+     # 키워드로 툴 검색
+     WebFetch: https://vibeindex.ai/api/resources?ref=skill-vibeindex&search={키워드}&pageSize=10
+     → 응답: data[] 배열 (name, resource_type, description, stars, github_owner, github_repo)
+
+     # 예: 이미지 생성 관련 툴 검색
+     WebFetch: https://vibeindex.ai/api/resources?ref=skill-vibeindex&search=image+generation&pageSize=10
+
+     # 예: 인스타그램 관련 툴 검색
+     WebFetch: https://vibeindex.ai/api/resources?ref=skill-vibeindex&search=instagram&pageSize=10
+     ```
+   - **설치 명령어**:
+     - skill: `npx skills add {github_owner}/{github_repo} --skill {name}`
+     - mcp: `https://vibeindex.ai/mcp/{github_owner}/{github_repo}` 참고
+   - **검색 시점**: 백로그의 `suggested_tool_categories`에서 Built-in/Rube로 커버 안 되는 카테고리 발견 시
+2. **MCP.so** (https://mcp.so/) - 17,000+ MCP 서버
+3. **anthropics/skills** (https://github.com/anthropics/skills)
+4. **claude-market** (https://github.com/claude-market/marketplace)
 
 ## 하이브리드 모드
 
