@@ -38,7 +38,8 @@ ai_company/
 │   │   ├── rm-agent.md          # RM(Resource Manager) 에이전트
 │   │   ├── tool-agent.md        # Tool 컨설턴트 에이전트
 │   │   ├── hr-agent.md          # HR 에이전트
-│   │   └── expert-agent.md      # Expert 에이전트
+│   │   ├── expert-agent.md      # Expert 에이전트 (기본 템플릿)
+│   │   └── expert-00N.md        # HR이 생성한 전문가 에이전트 파일
 │   │
 │   ├── skills/                  # 유틸리티 스킬 (지침/도구)
 │   │   ├── ai-company/          # 메인 오케스트레이터
@@ -106,7 +107,7 @@ ai_company/
 | **tool-agent** | **Phase 1: Tool 인벤토리 생성** / **Phase 2: 레퍼런스 분석 + Tool 조정** | Read, Glob, Grep, Bash, WebSearch, WebFetch | sonnet |
 | **hr-agent** | **Tool 인벤토리 참고하여 역량 기반** 전문가 고용 + agent 파일 생성 | Read, Write, Glob | sonnet |
 | **expert-agent** | **analyzed_content + ceo_instructions** 기반 태스크 실행 | Read, Write, Edit, Bash, WebSearch, WebFetch, Glob, Grep | sonnet |
-| **qa-agent** | **Expert 결과물 품질 검증** (0~100점), 70점 미만 시 반려+피드백 → 재시도 (최대 3회) | Read, Glob, Grep, Bash, WebFetch | sonnet |
+| **qa-agent** | **Expert 결과물 품질 검증** (0~100점), 70점 미만 시 반려+피드백 → 재시도 (최대 3회). ACTION_VISUAL 태스크는 `docs/design-system.md` 기준으로 디자인 품질 검증 | Read, Glob, Grep, Bash, WebFetch | sonnet |
 
 ---
 

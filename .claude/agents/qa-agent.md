@@ -1,6 +1,6 @@
 ---
 name: qa-agent
-description: "QA 에이전트. Expert 에이전트의 결과물을 검증하고 품질 점수를 책정합니다. 기준 점수(70점) 미달 시 구체적 피드백과 함께 반려하여 재작업을 요청하고, 통과 시 승인합니다. 태스크 실행이 완료될 때마다 호출됩니다."
+description: "QA 에이전트. Expert 에이전트의 결과물을 검증하고 품질 점수를 책정합니다. 기준 점수(70점) 미달 시 구체적 피드백과 함께 반려하여 재작업을 요청하고, 통과 시 승인합니다. 태스크 실행이 완료된 후 품질 검증이 필요할 때 사용하세요."
 tools: Read, Glob, Grep, Bash, WebFetch
 model: sonnet
 ---
@@ -123,6 +123,90 @@ QA 에이전트는 다음 파일들을 읽어 평가합니다:
 
 ---
 
+#### ACTION 태스크 — 시각 디자인 (40점)
+
+`task_type: ACTION_VISUAL` — 카드뉴스, 포스터, 배너, SNS 이미지, 웹 컴포넌트 HTML 등에 적용합니다.
+
+> **검증 기준 참조**: `docs/design-system.md`의 Layer A 절대 규칙 및 Self-Check Checklist를 기준으로 검증합니다.
+> 세부 기준(폰트 최솟값, 계층 비율, 여백 규칙 등)은 해당 문서를 확인하세요.
+
+**결과물 형식은 `completion_criteria.expected_outputs`에서 먼저 확인합니다.**
+HTML이 의도된 결과물일 수 있으므로, 기대 형식에 따라 검증 방법이 달라집니다.
+
+| 항목 | 배점 | 검증 방법 |
+|------|------|---------|
+| 파일 존재 + 형식 | 15점 | `completion_criteria`의 기대 형식과 실제 파일 형식 일치 여부 확인 |
+| 타이포그래피 품질 | 10점 | HTML/CSS 직접 파싱 또는 PNG 확인. 아래 체크리스트 적용 |
+| 레이아웃 품질 | 10점 | HTML/CSS 직접 파싱. 아래 체크리스트 적용 |
+| 해상도/크기 정합성 | 5점 | PNG라면 PIL로 해상도 확인. HTML이라면 `width/height` CSS 확인 |
+
+**ACTION_VISUAL 즉시 탈락 조건:**
+- `company/outputs/`에 파일이 아예 없음 → 전체 0점
+- 파일 크기 0B → 0점
+- `completion_criteria`에서 PNG 요구했는데 HTML만 존재 → 파일 존재 0점 (단, HTML이 의도된 형식이면 정상)
+
+**타이포그래피 체크리스트 (10점) — HTML/CSS에서 직접 확인:**
+```
+☐ 최솟값 준수: 모든 font-size 값이 14px 이상인가        (위반 시 -5점)
+☐ 계층 비율: 인접 요소 font-size 차이가 1.25x 이상인가   (위반 시 -3점)
+☐ line-height: 본문 텍스트에 1.4 이상 설정됐는가         (위반 시 -2점)
+☐ word-break: keep-all 또는 break-word 설정됐는가 (한국어)(위반 시 -2점)
+```
+
+**레이아웃 체크리스트 (10점) — HTML/CSS에서 직접 확인:**
+```
+☐ 텍스트 여백: padding이 40px 이상 또는 가장자리 근접 요소 없음  (위반 시 -4점)
+☐ overflow: hidden 설정됐는가 (텍스트 잘림 방지)                 (위반 시 -3점)
+☐ 간격 일관성: gap/padding/margin 값이 8의 배수인가               (위반 시 -2점)
+☐ position: absolute 요소가 컨테이너 밖으로 나가지 않는가         (위반 시 -3점)
+```
+
+**ACTION_VISUAL 검증 절차:**
+```
+1. completion_criteria.expected_outputs에서 기대 파일 형식 확인
+   → type: "image" (PNG/JPG) 또는 type: "html" 확인
+
+2. Glob: company/outputs/{task_id}_* 로 파일 탐색
+   → 파일 없으면 즉시 0점 반려
+   → 기대 형식과 실제 파일 확장자 대조
+
+[PNG/이미지인 경우]
+3a. Bash: ls -lh company/outputs/{task_id}_*.png
+    → 파일별 크기 확인 (30KB 미만이면 렌더링 불량 의심)
+
+3b. Python PIL 해상도 확인:
+    python3 -c "
+    from PIL import Image
+    import glob
+    for f in glob.glob('company/outputs/{task_id}_*.png'):
+        img = Image.open(f)
+        print(f, img.size, img.format)
+    "
+
+3c. HTML 소스가 남아 있다면 CSS도 함께 확인 (4번으로)
+
+[HTML인 경우]
+3a. Bash: ls -lh company/outputs/{task_id}_*.html
+    → 크기 확인 (1KB 미만이면 내용 없음 의심)
+
+[공통 — HTML/CSS 파싱으로 디자인 품질 검증]
+4. Read로 HTML 파일 전체 내용 읽기
+   → <style> 블록 또는 inline style에서 CSS 추출
+
+5. Grep으로 타이포그래피 값 추출:
+   Bash: grep -oP "font-size:\s*\K[\d.]+" {html_file}
+   → 14 미만 값이 있으면 타이포그래피 감점
+   → 추출된 크기들의 최대/최소 비율 계산 → 1.25x 미만이면 감점
+
+6. Grep으로 레이아웃 값 추출:
+   Bash: grep -E "overflow|word-break|padding|gap" {html_file}
+   → overflow:hidden 없으면 감점
+   → word-break:keep-all 없으면 감점 (한국어 포함 시)
+   → padding 값이 40px 미만이면 감점
+```
+
+---
+
 #### ACTION 태스크 — 외부 서비스 (40점)
 
 | 항목 | 배점 | 검증 방법 |
@@ -165,7 +249,7 @@ QA 에이전트는 다음 파일들을 읽어 평가합니다:
 
 ```
 1. task_assignments.json에서 평가 대상 태스크 정보 로드
-   → task_type (RESEARCH / DOCUMENT / ACTION_FILE / ACTION_EXTERNAL) 확인
+   → task_type (RESEARCH / DOCUMENT / ACTION_FILE / ACTION_VISUAL / ACTION_EXTERNAL) 확인
    → completion_criteria 확인 (있으면 이것이 1차 검증 기준)
      ↓
 2. execution_log.json에서 해당 태스크 실행 기록 확인
@@ -174,6 +258,8 @@ QA 에이전트는 다음 파일들을 읽어 평가합니다:
 3. 즉시 탈락 조건 먼저 확인 (해당 시 0점 즉시 반려)
    ┌─ ACTION_FILE: company/outputs/에 파일 없음 → 0점
    ├─ ACTION_FILE: 파일 크기 0B → 0점
+   ├─ ACTION_VISUAL: company/outputs/에 파일 없음 → 0점
+   ├─ ACTION_VISUAL: completion_criteria에서 PNG 요구했는데 HTML만 있음 → 파일 형식 0점
    ├─ ACTION_EXTERNAL: execution_log에 외부 ID 없음 → 0점
    ├─ ACTION_EXTERNAL: production 모드에서 dry_run_mock_ ID → 0점
    ├─ RESEARCH: tools_used에 WebSearch/WebFetch 없음 → 0점 (hallucination)
@@ -198,6 +284,12 @@ QA 에이전트는 다음 파일들을 읽어 평가합니다:
    │   → Glob + ls -lh: 파일 존재 + 크기 확인 (존재 20점)
    │   → Bash: file {path} 로 실제 타입 확인 (포맷 10점)
    │   → 이미지라면: Python PIL로 해상도/포맷 확인 (품질 10점)
+   │
+   ├─ ACTION_VISUAL
+   │   → completion_criteria로 기대 형식(PNG/HTML) 확인 → Glob으로 파일 존재 + 형식 대조 (파일 15점)
+   │   → HTML Read + Grep: font-size 값 추출 → 14px 미만 탐지, 계층 비율 계산 (타이포 10점)
+   │   → HTML Read + Grep: overflow/word-break/padding 값 추출 (레이아웃 10점)
+   │   → PNG라면 Python PIL 해상도 확인 / HTML이라면 CSS width/height 확인 (크기 5점)
    │
    └─ ACTION_EXTERNAL
        → execution_log에서 외부 ID 필드 확인 (ID 존재 20점)
