@@ -49,12 +49,6 @@ ai_company/
 │   │
 │   └── CLAUDE.md                # 이 파일
 │
-├── .agents/
-│   └── skills/                  # npx skills add 로 설치된 외부 스킬 원본
-│       ├── pollinations-ai/     # (실제 파일 위치)
-│       └── image-generation-mcp/ # (실제 파일 위치)
-│         ※ .claude/skills/ 에 symlink로 연결되어 Claude Code가 자동 인식
-│
 ├── company/
 │   ├── state/                   # 상태 파일 (JSON)
 │   │   ├── session.json         # 현재 세션 정보
@@ -334,6 +328,11 @@ task_assignments.json 업데이트
 - `/mcp-builder` - MCP 서버 생성
 - `/pollinations-ai` - 무료 이미지 생성 (API 키 불필요, flux/turbo/stable-diffusion 모델)
 - `/image-generation-mcp` - Gemini MCP 기반 고품질 이미지 생성 (gemini-cli 필요)
+- `/ecosystem` - Claude Code 생태계 대시보드 (stats/trends)
+- `/vibeindex` - 프로젝트 분석 + 스킬/MCP/플러그인 추천
+- `/rising` - GitHub 트렌딩 Claude Code 리소스 탐색
+- `/new` - Vibe Index 최신 리소스 탐색
+- `/versus` - Claude Code 리소스 비교
 
 ### MCP (프로젝트 레벨 설정 - `.mcp.json`)
 - **`rube` - 외부 서비스 통합 허브** (아래 상세 설명 참조) **[기본 설정됨]**
