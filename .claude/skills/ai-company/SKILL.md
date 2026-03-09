@@ -463,6 +463,81 @@ QA 에이전트는 여러 인스턴스가 동시에 실행될 수 있습니다.
   ✅ task-001 QA → score 82 → 승인 → task-002 unlock → expert-001 background 재시작
   ✅ task-004 QA → score 75 → 승인 → task-005 unlock → expert-002 background 재시작
 ```
+══════════════════════════════════════════════════════════════
+  프로젝트 4: 초기 콘텐츠 제작 및 론칭
+  실행 계획 (3 tasks)
+══════════════════════════════════════════════════════════════
+
+  [1] Task 010: 론칭용 밈 콘텐츠 30개 제작
+      담당: 밈 콘텐츠 제작 전문가 (expert-004)
+      Tool: Gemini 이미지 생성 + Imgflip API + PIL
+      출력: PNG 30개 (1080x1080)
+      의존: task-004 (밈 소재), task-009 (비주얼 가이드라인)
+
+  [2] Task 011: 캡션 및 해시태그 작성
+      담당: 밈 콘텐츠 제작 전문가 (expert-004)
+      Tool: Read + Write
+      출력: Markdown 문서
+      의존: task-010, task-006
+
+  [3] Task 012: 론칭 체크리스트 (CEO 승인 필요)
+      담당: 밈 콘텐츠 제작 전문가 (expert-004)
+      Tool: Read + Write + Glob
+      출력: 체크리스트 문서
+      의존: task-007, task-008, task-011
+
+──────────────────────────────────────────────────────────────
+  수정하실 태스크가 있으면 번호를 말씀해주세요.
+  레퍼런스를 첨부하시려면 "task-010에 [URL/파일/메모] 추가"
+  Tool을 변경하시려면 "task-010은 Imgflip API 써줘"
+  전체 OK면 "승인" 또는 "실행"
+══════════════════════════════════════════════════════════════
+```
+
+### Step 8: CEO 태스크별 승인/수정
+
+CEO의 개입 유형:
+
+| 유형 | 예시 | 결과 |
+|------|------|------|
+| **승인** | "OK", "전부 승인" | briefing_approved = true → 실행 |
+| **Tool 변경** | "task-010은 Imgflip API 써줘" | ceo_tools 업데이트 |
+| **레퍼런스 추가** | "이 이미지 참고해" (파일/URL/메모) | → Step 9 분석 |
+| **지시사항** | "PNG 출력, AI 티 내지 마" | ceo_instructions 업데이트 |
+| **일괄 승인** | "전부 OK" | 모든 태스크 한번에 승인 |
+
+CEO 개입 예시:
+```
+CEO: "task-010은 Imgflip API로 클래식 밈 만들고,
+      Gemini로 커스텀 일러스트도 만들어줘.
+      이 이미지들 참고해" (이미지 첨부)
+      "PNG로 출력해줘. AI 만든 티 나면 안 돼."
+
+→ 업데이트:
+  [1] Task 010: 론칭용 밈 콘텐츠 30개 제작  [수정됨]
+      담당: 밈 콘텐츠 제작 전문가
+      Tool: Imgflip API + Gemini 이미지 생성 + PIL    ← 변경
+      레퍼런스: CEO 제공 이미지 (style)                 ← 추가
+      지시: PNG 출력, AI 티 제거                        ← 추가
+
+CEO: "OK 승인"
+→ 실행 시작
+```
+
+저장: `company/state/task_assignments.json` (ceo_tools, ceo_references, ceo_instructions 업데이트)
+
+### Step 9: 레퍼런스 분석 + Tool 조정 (필요시만)
+
+CEO가 레퍼런스를 첨부한 경우에만 **tool-agent 호출**.
+"Analyze Once, Use Everywhere" 원칙에 따라 분석합니다.
+
+분석 프로세스:
+1. 레퍼런스 타입 + 의도(intent) 분석
+2. URL → WebFetch / 이미지 → Read / 파일 → Read / 메모 → 키워드 추출
+3. analyzed_content에 저장 (fetched_summary, key_findings, style_elements, actionable_insights)
+4. direction(방향성) 도출
+5. enriched_description(상세 태스크 설명) 생성
+6. CEO 요청 Tool 가용성 확인 (인벤토리에서 조회)
 
 **QA 실패 시 재시도 흐름:**
 ```
@@ -511,6 +586,15 @@ QA 에이전트는 여러 인스턴스가 동시에 실행될 수 있습니다.
   → Agent("expert-001", background=true, "task-002 실행") ─┐ 동시 시작
   → Agent("expert-002", background=true, "task-005 실행") ─┘
   (이하 동일 패턴 반복)
+```
+
+독립 태스크가 여러 개인 경우 자동 병렬:
+```
+[병렬 실행]
+  task-004 (독립) ──┐
+  task-006 (독립) ──┤ 동시 실행!
+                    ↓
+  task-005 (task-004 의존) → 순차
 ```
 
 저장: `company/state/execution_log.json`

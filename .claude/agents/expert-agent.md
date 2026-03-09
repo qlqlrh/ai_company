@@ -224,6 +224,7 @@ Expert는 `task_assignments.json`의 해당 태스크에서 `ceo_references[].an
 `analyzed_content`가 없으면 태스크 설명(`enriched_description` 또는 기본 description)과 프로젝트 맥락을 기반으로 최선의 판단으로 실행합니다.
 필요시 CEO에게 INFO_REQUEST 인터럽트로 방향성을 확인합니다.
 
+
 ## 에러 핸들링 + 폴백 체인
 
 ACTION 태스크에서 도구 호출이 실패할 경우, **즉시 TOOL_ERROR를 발생시키지 않고** 아래 3단계 폴백을 순서대로 시도합니다. 모든 레벨이 실패한 경우에만 TOOL_ERROR를 발생시킵니다.
@@ -360,6 +361,7 @@ SNS 게시 (Instagram via Rube 실패 시):
 ❌ 도구가 not_connected여서 못 했음 → TOOL_ERROR 인터럽트 발생 후 중단
 
 실행이 불가능한 상황이면 조용히 우회하지 말고, 반드시 **TOOL_ERROR 인터럽트**를 발생시키고 이유를 명시하세요.
+
 
 ## Tool 사용 방법
 
